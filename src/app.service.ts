@@ -122,4 +122,27 @@ export class AppService {
   homePage(request: Request, response: Response): void {
     return response.sendFile(__dirname + '/' + 'index.html');
   }
+
+  async searchDriversCancel(request: Request, response: Response) {
+    let order_info_string = await this.redisAsyncClient.get(`cityorder${request.params.id}`);
+    if(order_info_string == null){
+      return response.status(200).json({
+        success: true
+      })
+    }else{
+      let order_info = JSON.parse(order_info_string)
+      for (let index = 1; index <= 10; index++) {
+        let lastjob = await this.queue.getJob("order-"+order_info.id+"-"+index);
+        await lastjob?.remove();
+      }
+      order_info.status = "client_cancelled"
+      let driver_id = await this.redisAsyncClient.get(`order_driver_${order_info.id}`);
+      let socket_id = await this.redisAsyncClient.get(`siddriver${driver_id}`);
+      console.log(order_info, driver_id, socket_id)
+      this.io.server.to(socket_id).emit(`driver_orders`, {id: order_info.id,status:'client_cancelled'});
+      return response.status(200).json({
+        success: true
+      })
+    }
+  }
 }
