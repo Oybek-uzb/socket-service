@@ -7,6 +7,7 @@ import {RmqModule} from "./rmq/rmq.module";
 import {ServerGateway} from "./socket/socket.gateway";
 import {RedisModule} from "./redis/redis.module";
 import {BullModule} from "@nestjs/bull";
+import {OrderProcessingConsumer} from "./bull/queue.processor";
 
 @Module({
   imports: [
@@ -15,14 +16,17 @@ import {BullModule} from "@nestjs/bull";
       envFilePath: ['.env'],
     }),
     BullModule.registerQueue({
-      name: 'my-queue',
-      url: "amqp://localhost:6379"
+      name: 'order-processing',
+      redis: {
+        host: 'localhost',
+        port: 6379
+      }
     }),
-      RedisModule,
-      DatabaseModule,
-      RmqModule,
+    RedisModule,
+    DatabaseModule,
+    RmqModule,
   ],
   controllers: [AppController],
-  providers: [AppService, ServerGateway],
+  providers: [AppService, ServerGateway, OrderProcessingConsumer],
 })
 export class AppModule {}

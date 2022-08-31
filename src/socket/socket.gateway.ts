@@ -3,12 +3,26 @@ import {
     WebSocketGateway,
     WebSocketServer,
 } from '@nestjs/websockets';
-import { Socket } from 'socket.io';
+import { Socket, Server } from 'socket.io';
+import {createAdapter} from '@socket.io/redis-adapter';
+import {Inject, Injectable} from "@nestjs/common";
+import Redis from "ioredis";
 
+@Injectable()
 @WebSocketGateway(3001, { cors: true })
 export class ServerGateway {
+
     @WebSocketServer()
-    server;
+    server: Server;
+
+    constructor(
+        @Inject('REDIS_PUB_CLIENT') private readonly redisPubClient: Redis,
+        @Inject('REDIS_SUB_CLIENT') private readonly redisSubClient: Redis
+    ) {}
+
+    afterInit(server: Server) {
+        server.adapter(createAdapter(this.redisPubClient, this.redisSubClient))
+    }
 
     private sockets = new Map();
 
@@ -19,6 +33,9 @@ export class ServerGateway {
             attempts: 0,
             repeater: null,
         });
+
+        const io = new Server()
+        io.adapter()
 
         this.checkAndSend(client.id);
 
