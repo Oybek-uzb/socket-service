@@ -26,10 +26,10 @@ export class AppController {
     return this.appService.searchDriversCancel(request, response);
   }
 
-  // @Get('/search-drivers/:id/accept')
-  // searchDriversAccept(@Req() request: Request, @Res() response: Response) {
-  //   return this.appService.searchDriversAccept(request, response);
-  // }
+  @Get('/search-drivers/:id/accept')
+  searchDriversAccept(@Req() request: Request, @Res() response: Response) {
+    return this.appService.searchDriversAccept(request, response);
+  }
 
   @Get()
   homePage(@Req() request: Request, @Res() response: Response): void {
