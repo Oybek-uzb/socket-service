@@ -7,6 +7,8 @@ import { Socket, Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { Inject, Injectable } from '@nestjs/common';
 import Redis from 'ioredis';
+import * as jwtDecode from "jwt-decode"
+import {DefaultEventsMap} from "socket.io/dist/typed-events";
 
 @Injectable()
 @WebSocketGateway(3001, { cors: true })
@@ -21,57 +23,26 @@ export class ServerGateway {
 
   afterInit(server: Server) {
     server.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
-  }
-
-  private sockets = new Map();
-
-  @SubscribeMessage('connected')
-  handleConnect(client: Socket, data: string): void {
-    this.sockets.set(client.id, {
-      isResponded: false,
-      attempts: 0,
-      repeater: null,
-    });
-
-    const io = new Server();
-    io.adapter();
-
-    this.checkAndSend(client.id);
-
-    const current_socket = this.sockets.get(client.id);
-
-    current_socket.repeater = setInterval(() => {
-      if (!current_socket.isResponded && current_socket.attempts != 3) {
-        this.checkAndSend(client.id);
+    server.use(async (socket, next) => {
+      const header = socket.handshake.headers['authorization'];
+      let is_valid = await this.isValidJwt(header, socket)
+      if (is_valid) {
+        next();
       } else {
-        if (current_socket.isResponded) {
-          console.log(
-            `client with id: ${client.id} has responded in ${current_socket.attempts} attempt(s)!`,
-          );
-        } else {
-          console.log(
-            `client with id: ${client.id} has not responded in 3 attempts!`,
-          );
-        }
-        clearInterval(current_socket.repeater);
+        next(new Error('unauthorized'));
       }
-    }, 10000);
+    })
   }
 
-  @SubscribeMessage('random')
-  handleRandomMessage(client: Socket, data: string): void {
-    this.sockets.set(client.id, {
-      ...this.sockets.get(client.id),
-      isResponded: true,
-    });
-  }
-
-  checkAndSend(socketId) {
-    this.server.emit('conn-checked', 'from server');
-    this.sockets.set(socketId, {
-      ...this.sockets.get(socketId),
-      isResponded: false,
-      attempts: this.sockets.get(socketId).attempts + 1,
-    });
+  async isValidJwt(header, socket) {
+    const token = header.split(' ')[1];
+    let decoded = jwtDecode.default<any>(token);
+    // console.log(decodeid.user_type, decoded.user_id)
+    process.env.TZ = "Asia/Tashkent";
+    if (Math.floor(new Date().getTime() / 1000) > decoded.exp || Math.floor(new Date().getTime() / 1000) < decoded.iat || decoded.user_id == undefined || decoded.user_type == undefined) {
+      return false;
+    }
+    await this.redisPubClient.set(`sid${decoded.user_type}${decoded.user_id}`, socket.id, 'EX', 30 * 60);
+    return true;
   }
 }
