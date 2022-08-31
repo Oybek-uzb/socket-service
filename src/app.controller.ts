@@ -11,13 +11,20 @@ export class AppController {
   //   return this.appService.getHello();
   // }
 
-  @Get('/search-drivers/:id/skip')
-  searchDrivers(@Req() request: Request, @Res() response: Response) {
+  @Get('/search-drivers/:id')
+  async searchDrivers(@Req() request: Request, @Res() response: Response) {
     return this.appService.searchDrivers(request, response);
+  }
+
+  @Get('/search-drivers/:id/skip')
+  searchDriversSkip(@Req() request: Request, @Res() response: Response) {
+    return this.appService.searchDriversSkip(request, response);
   }
 
   @Get()
   homePage(@Req() request: Request, @Res() response: Response): void {
     return this.appService.homePage(request, response);
   }
+
+
 }
