@@ -1,15 +1,40 @@
 import { Controller, Get, Req, Res } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Request, Response } from 'express';
+import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
+import { RmqService } from './rmq/rmq.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly rmqService: RmqService,
+  ) {}
 
   // @Get()
   // async getHello(): Promise<string> {
   //   return this.appService.getHello();
   // }
+
+  @EventPattern('socket-service')
+  async check(
+    @Payload() data: any,
+    @Ctx() context: RmqContext,
+  ): Promise<string> {
+    await this.appService.check(data, context);
+    // const qu = "INSERT INTO users(name) VALUES ('John')"
+    // let ex = await this.db.executeQuery(qu);
+    //
+    // const q = "SELECT * FROM users";
+    // let exec = await this.db.executeQuery(q);
+    // console.log(exec)
+    // console.log(this.redisGeoClient)
+
+    console.log(context);
+    console.log(this.rmqService.ack(context));
+
+    return 'Hello World!';
+  }
 
   @Get('/search-drivers/:id')
   async searchDrivers(@Req() request: Request, @Res() response: Response) {
@@ -35,6 +60,4 @@ export class AppController {
   homePage(@Req() request: Request, @Res() response: Response): void {
     return this.appService.homePage(request, response);
   }
-
-
 }

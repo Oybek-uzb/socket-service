@@ -6,7 +6,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const rmqService = app.get<RmqService>(RmqService);
-  app.connectMicroservice(rmqService.getOptions('DRIVER_TRACKING'));
+  app.connectMicroservice(rmqService.getOptions('SOCKET_SERVICE'));
+
   await app.startAllMicroservices();
 
   app.enableShutdownHooks();
