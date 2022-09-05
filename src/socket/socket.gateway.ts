@@ -95,7 +95,6 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
             console.log(err)
             reject(err);
           } else {
-            console.log(driver)
             resolve(driver);
           }
         },
