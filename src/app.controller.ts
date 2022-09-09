@@ -20,20 +20,8 @@ export class AppController {
   async check(
     @Payload() data: any,
     @Ctx() context: RmqContext,
-  ): Promise<string> {
+  ): Promise<void> {
     await this.appService.check(data, context);
-    // const qu = "INSERT INTO users(name) VALUES ('John')"
-    // let ex = await this.db.executeQuery(qu);
-    //
-    // const q = "SELECT * FROM users";
-    // let exec = await this.db.executeQuery(q);
-    // console.log(exec)
-    // console.log(this.redisGeoClient)
-
-    console.log(context);
-    console.log(this.rmqService.ack(context));
-
-    return 'Hello World!';
   }
 
   @Get('/search-drivers/:id')

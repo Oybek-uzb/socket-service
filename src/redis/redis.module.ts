@@ -1,4 +1,3 @@
-import { createClient } from '@redis/client';
 import * as asyncRedis from 'async-redis';
 import * as geoRedis from 'georedis';
 import { Module } from '@nestjs/common';

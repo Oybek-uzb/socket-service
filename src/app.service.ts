@@ -26,9 +26,7 @@ export class AppService {
 
   async check(data: any, context: RmqContext) {
     let body = JSON.parse(data.content.toString());
-    let user_id;
-    let user_type;
-    let soc;
+    let user_id, user_type, soc;
     if (body.driver_id === undefined && body.client_id !== 0) {
       user_id = body['client_id'];
       user_type = 'client';
@@ -44,7 +42,7 @@ export class AppService {
     console.log(body, user_id, user_type, soc);
     this.redisPubClient.get(
       `sid${user_type}${user_id}`,
-      this.handleCheck.bind(soc, body),
+      this.handleCheck.bind(this, soc, body),
     );
   }
 

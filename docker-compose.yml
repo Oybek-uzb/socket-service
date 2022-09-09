@@ -1,0 +1,36 @@
+version: '3.6'
+services:
+  # rabbit:
+  #   image: rabbitmq:latest
+  #   hostname: rabbitmq
+  #   environment:
+  #     - RABBITMQ_DEFAULT_USER=admin
+  #     - RABBITMQ_DEFAULT_PASS=mypass
+  #   ports:
+  #   - 5672:5672
+  #   restart: always
+  #   networks:
+  #   - test-network
+
+  # redis:
+  #   image: redis
+  #   hostname: redis
+  #   ports:
+  #   - 6379:6379
+  #   restart: always
+  #   networks:
+  #   - test-network
+
+  app:
+    image: 8351641669ff
+    ports:
+    - 3002:3002
+    # depends_on:
+    #   - redis
+    #   - rabbit
+    # links: [rabbit, redis]
+    networks:
+    - test-network
+networks:
+  test-network:
+    driver: bridge

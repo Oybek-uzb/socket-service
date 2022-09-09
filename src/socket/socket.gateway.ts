@@ -12,7 +12,6 @@ import Redis from 'ioredis';
 import * as jwtDecode from 'jwt-decode';
 import { DatabaseService } from '../db/database.service';
 import * as moment from 'moment';
-import e from "express";
 
 @Injectable()
 @WebSocketGateway(3100, { cors: true })
