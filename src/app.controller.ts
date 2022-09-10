@@ -11,11 +11,6 @@ export class AppController {
     private readonly rmqService: RmqService,
   ) {}
 
-  // @Get()
-  // async getHello(): Promise<string> {
-  //   return this.appService.getHello();
-  // }
-
   @EventPattern('socket-service')
   async check(
     @Payload() data: any,
