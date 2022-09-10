@@ -1,12 +1,10 @@
-import { InjectQueue, Process, Processor } from '@nestjs/bull';
-import { Job, DoneCallback, Queue } from 'bull';
+import { Process, Processor } from '@nestjs/bull';
+import { Job, DoneCallback } from 'bull';
 import { Inject } from '@nestjs/common';
 import Redis from 'ioredis';
 import { DatabaseService } from '../db/database.service';
 import { ServerGateway } from '../socket/socket.gateway';
 import { searchDriver } from '../utils/orders';
-import { Sequelize } from 'sequelize';
-import { SEQUELIZE } from '../constants';
 
 @Processor('order-processing')
 export class OrderProcessingConsumer {
