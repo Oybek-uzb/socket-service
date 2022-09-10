@@ -60,6 +60,8 @@ export class AppService {
     //console.log(ip)
     let order_info = null;
     let sub_order;
+    console.log("come");
+    
     let order = await this.db.executeQuery(
       `SELECT * FROM orders WHERE id=${request.params.id} AND order_type='city' AND order_status='new'`,
     );
