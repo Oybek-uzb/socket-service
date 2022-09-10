@@ -45,9 +45,8 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // console.log(decodeid.user_type, decoded.user_id)
     process.env.TZ = 'Asia/Tashkent';
     const now = new Date().getTime();
-    // TODO !()
     if (
-      !(Math.floor(now / 1000) > decoded.exp) ||
+      Math.floor(now / 1000) > decoded.exp ||
       Math.floor(now / 1000) < decoded.iat ||
       decoded.user_id == undefined ||
       decoded.user_type == undefined
