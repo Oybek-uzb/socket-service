@@ -12,31 +12,34 @@ export class AppController {
   ) {}
 
   @EventPattern('socket-service')
-  async check(
-    @Payload() data: any,
-    @Ctx() context: RmqContext,
-  ): Promise<void> {
+  async check(@Payload() data: any, @Ctx() context: RmqContext): Promise<void> {
     await this.appService.check(data, context);
   }
 
   @Get('/search-drivers/:id')
   async searchDrivers(@Req() request: Request, @Res() response: Response) {
-    return this.appService.searchDrivers(request, response);
+    return await this.appService.searchDrivers(request, response);
   }
 
   @Get('/search-drivers/:id/skip')
-  searchDriversSkip(@Req() request: Request, @Res() response: Response) {
-    return this.appService.searchDriversSkip(request, response);
+  async searchDriversSkip(@Req() request: Request, @Res() response: Response) {
+    return await this.appService.searchDriversSkip(request, response);
   }
 
   @Get('/search-drivers/:id/cancel')
-  searchDriversCancel(@Req() request: Request, @Res() response: Response) {
-    return this.appService.searchDriversCancel(request, response);
+  async searchDriversCancel(
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    return await this.appService.searchDriversCancel(request, response);
   }
 
   @Get('/search-drivers/:id/accept')
-  searchDriversAccept(@Req() request: Request, @Res() response: Response) {
-    return this.appService.searchDriversAccept(request, response);
+  async searchDriversAccept(
+    @Req() request: Request,
+    @Res() response: Response,
+  ) {
+    return await this.appService.searchDriversAccept(request, response);
   }
 
   @Get()

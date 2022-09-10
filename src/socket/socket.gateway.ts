@@ -90,7 +90,7 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         options,
         function (err, driver) {
           if (err) {
-            console.log(err)
+            console.log(err);
             reject(err);
           } else {
             resolve(driver);
@@ -99,7 +99,7 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
     });
 
-    return await driver
+    return await driver;
   }
 
   @SubscribeMessage('send_message')

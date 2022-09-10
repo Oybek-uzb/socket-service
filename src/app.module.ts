@@ -9,7 +9,6 @@ import { RedisModule } from './redis/redis.module';
 import { BullModule } from '@nestjs/bull';
 import { OrderProcessingConsumer } from './bull/queue.processor';
 import { RmqService } from './rmq/rmq.service';
-import { ClientProxy } from '@nestjs/microservices';
 
 @Module({
   imports: [

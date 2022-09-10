@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from './db/database.service';
 import Redis from 'ioredis';
 import { InjectQueue } from '@nestjs/bull';
@@ -12,11 +12,12 @@ import { RmqContext } from '@nestjs/microservices';
 @Injectable()
 export class AppService {
   private readonly skip_time = 20000;
+  private readonly logger = new Logger(DatabaseService.name);
 
   constructor(
-    private readonly db: DatabaseService,
     private readonly io: ServerGateway,
     private readonly rmq: RmqService,
+    private readonly db: DatabaseService,
     @Inject('REDIS_PUB_CLIENT') private readonly redisPubClient: Redis,
     @Inject('REDIS_SUB_CLIENT') private readonly redisSubClient: Redis,
     @Inject('REDIS_ASYNC_CLIENT') private readonly redisAsyncClient: Redis,
@@ -60,16 +61,24 @@ export class AppService {
     //console.log(ip)
     let order_info = null;
     let sub_order;
-    console.log("come");
+    let order;
     
-    let order = await this.db.executeQuery(
-      `SELECT * FROM orders WHERE id=${request.params.id} AND order_type='city' AND order_status='new'`,
-    );
-    if (order.length == 1) {
-      sub_order = await this.db.executeQuery(
-        `SELECT * FROM city_orders WHERE id=${order[0].order_id}`,
+    try {
+      order = await this.db.executeQuery(
+        `SELECT * FROM orders WHERE id=${request.params.id} AND order_type='city' AND order_status='new'`,
       );
+      
+      if (order.length == 1) {
+        sub_order = await this.db.executeQuery(
+          `SELECT * FROM city_orders WHERE id=${order[0].order_id}`,
+        );
+      }
+      
+    } catch (e) {
+      this.logger.error(e)
     }
+    
+    
     if (
       order.length == 1 &&
       sub_order.length == 1 &&

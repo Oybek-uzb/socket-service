@@ -5,6 +5,8 @@ import Redis from 'ioredis';
 import { DatabaseService } from '../db/database.service';
 import { ServerGateway } from '../socket/socket.gateway';
 import { searchDriver } from '../utils/orders';
+import { Sequelize } from 'sequelize';
+import { SEQUELIZE } from '../constants';
 
 @Processor('order-processing')
 export class OrderProcessingConsumer {
