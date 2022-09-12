@@ -1,18 +1,17 @@
 import { Controller, Get, Req, Res } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Request, Response } from 'express';
-import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
-import { RmqService } from './rmq/rmq.service';
+import { Ctx, MessagePattern, Payload, RmqContext } from '@nestjs/microservices';
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly rmqService: RmqService,
   ) {}
 
-  @EventPattern('socket-service')
+  @MessagePattern()
   async check(@Payload() data: any, @Ctx() context: RmqContext): Promise<void> {
+    console.log("Payload", data)
     await this.appService.check(data, context);
   }
 

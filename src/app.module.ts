@@ -8,7 +8,6 @@ import { ServerGateway } from './socket/socket.gateway';
 import { RedisModule } from './redis/redis.module';
 import { BullModule } from '@nestjs/bull';
 import { OrderProcessingConsumer } from './bull/queue.processor';
-import { RmqService } from './rmq/rmq.service';
 
 @Module({
   imports: [
@@ -25,9 +24,9 @@ import { RmqService } from './rmq/rmq.service';
     }),
     RedisModule,
     DatabaseModule,
-    RmqModule.register({ name: 'SOCKET_SERVICE' }),
+    RmqModule,
   ],
   controllers: [AppController],
-  providers: [AppService, ServerGateway, OrderProcessingConsumer, RmqService],
+  providers: [AppService, ServerGateway, OrderProcessingConsumer],
 })
 export class AppModule {}

@@ -65,7 +65,7 @@ export async function searchDriver(
   }
   if (order_info.attempts == 11) {
     let sid = await redisAsyncClient.get(`sidclient${order_info.client_id}`);
-    io.to(sid).emit(`client_orders`, {
+    io.server.to(sid).emit(`client_orders`, {
       id: order_info.id,
       status: 'driver_not_found',
     });
@@ -103,7 +103,7 @@ export async function searchDriver(
         'EX',
         60 * 60,
       );
-      io.to(socket_id).emit(`driver_orders`, order_info);
+      io.server.to(socket_id).emit(`driver_orders`, order_info);
       return true;
     }
   } else {

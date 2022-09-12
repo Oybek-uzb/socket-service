@@ -6,7 +6,6 @@ import { Queue } from 'bull';
 import { Request, Response } from 'express';
 import { searchDriver } from './utils/orders';
 import { ServerGateway } from './socket/socket.gateway';
-import { RmqService } from './rmq/rmq.service';
 import { RmqContext } from '@nestjs/microservices';
 
 @Injectable()
@@ -16,7 +15,6 @@ export class AppService {
 
   constructor(
     private readonly io: ServerGateway,
-    private readonly rmq: RmqService,
     private readonly db: DatabaseService,
     @Inject('REDIS_PUB_CLIENT') private readonly redisPubClient: Redis,
     @Inject('REDIS_SUB_CLIENT') private readonly redisSubClient: Redis,
@@ -26,7 +24,7 @@ export class AppService {
   ) {}
 
   async check(data: any, context: RmqContext) {
-    let body = JSON.parse(data.content.toString());
+    let body = data;
     let user_id, user_type, soc;
     if (body.driver_id === undefined && body.client_id !== 0) {
       user_id = body['client_id'];
@@ -58,7 +56,6 @@ export class AppService {
 
   async searchDrivers(request: Request, response: Response) {
     let ip = request.headers['x-forwarded-for'] || request.socket.remoteAddress;
-    //console.log(ip)
     let order_info = null;
     let sub_order;
     let order;
@@ -130,6 +127,9 @@ export class AppService {
         jobId: order_info.jobId,
         delay: this.skip_time,
       });
+
+      let queues = await this.queue.count()
+      this.logger.debug("Queue", JSON.stringify(queues))
       return response.status(200).json({
         success: true,
       });
