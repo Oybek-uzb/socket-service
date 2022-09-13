@@ -7,6 +7,8 @@ import { Request, Response } from 'express';
 import { searchDriver } from './utils/orders';
 import { ServerGateway } from './socket/socket.gateway';
 import { RmqContext } from '@nestjs/microservices';
+import { EventBody } from './dto/event_body';
+import { CityOrder, Order, OrderInfo, OrderStatuses } from './dto/orders';
 
 @Injectable()
 export class AppService {
@@ -23,32 +25,31 @@ export class AppService {
     @InjectQueue('order-processing') private readonly queue: Queue,
   ) {}
 
-  async check(data: any, context: RmqContext) {
-    let body = data;
-    let user_id, user_type, soc;
+  async rmqConsume(body: EventBody, context: RmqContext) {
+    let user_id: number, user_type: string, soc: string;
     if (body.driver_id === undefined && body.client_id !== 0) {
-      user_id = body['client_id'];
+      user_id = body.client_id;
       user_type = 'client';
       soc = 'client_orders';
-      delete body['client_id'];
+      delete body.client_id;
     }
-    if (body.client_id === undefined && body.driver_id !== undefined) {
-      user_id = body['driver_id'];
+    if (body.client_id === undefined && body.driver_id !== 0) {
+      user_id = body.driver_id;
       user_type = 'driver';
       soc = 'driver_orders';
-      delete body['driver_id'];
+      delete body.driver_id;
     }
     console.log(body, user_id, user_type, soc);
     this.redisPubClient.get(
       `sid${user_type}${user_id}`,
-      this.handleCheck.bind(this, soc, body),
+      this.emitFromConsumer.bind(this, soc, body),
     );
   }
 
-  handleCheck(soc, body, err, value) {
+  emitFromConsumer(soc: string, body: EventBody, err: Error, value: string) {
     if (err) {
       console.error('error');
-      console.info('error order ' + body['order_id']);
+      console.info('error order ' + body.id);
     } else {
       this.io.server.to(value).emit(soc, body);
     }
@@ -56,18 +57,18 @@ export class AppService {
 
   async searchDrivers(request: Request, response: Response) {
     let ip = request.headers['x-forwarded-for'] || request.socket.remoteAddress;
-    let order_info = null;
-    let sub_order;
-    let order;
+    let order_info: OrderInfo;
+    let sub_order: CityOrder;
+    let order: Order;
     
     try {
-      order = await this.db.executeQuery(
+      [order] = await this.db.executeQuery(
         `SELECT * FROM orders WHERE id=${request.params.id} AND order_type='city' AND order_status='new'`,
       );
       
-      if (order.length == 1) {
-        sub_order = await this.db.executeQuery(
-          `SELECT * FROM city_orders WHERE id=${order[0].order_id}`,
+      if (order) {
+        [sub_order] = await this.db.executeQuery(
+          `SELECT * FROM city_orders WHERE id=${order.order_id}`,
         );
       }
       
@@ -75,110 +76,128 @@ export class AppService {
       this.logger.error(e)
     }
     
-    
     if (
-      order.length == 1 &&
-      sub_order.length == 1 &&
-      sub_order[0].points.points.length > 0
+      order &&
+      sub_order &&
+      sub_order.points.points.length > 0
     ) {
       order_info = {
-        id: order[0].id,
-        client_id: order[0].client_id,
-        distance: sub_order[0].points.distance,
-        from: sub_order[0].points.points[0].address,
+        id: order.id,
+        client_id: order.client_id,
+        distance: sub_order.points.distance,
+        from: sub_order.points.points[0].address,
         to:
-          sub_order[0].points.points.length == 1
+          sub_order.points.points.length == 1
             ? null
-            : sub_order[0].points.points[sub_order[0].points.points.length - 1]
+            : sub_order.points.points[sub_order.points.points.length - 1]
                 .address,
-        from_loc: sub_order[0].points.points[0].location,
+        from_loc: sub_order.points.points[0].location,
         to_loc:
-          sub_order[0].points.points.length == 1
+          sub_order.points.points.length == 1
             ? null
-            : sub_order[0].points.points[sub_order[0].points.points.length - 1]
+            : sub_order.points.points[sub_order.points.points.length - 1]
                 .location,
-        payment_type: sub_order[0].payment_type,
-        tariff_id: sub_order[0].tariff_id,
-        has_conditioner: sub_order[0].has_conditioner,
-        comments: sub_order[0].comments,
-        status: order[0].order_status,
+        payment_type: sub_order.payment_type,
+        tariff_id: sub_order.tariff_id,
+        has_conditioner: sub_order.has_conditioner,
+        comments: sub_order.comments,
+        status: order.order_status,
         attempts: 1,
-        jobId: 'order-' + order[0].id + '-1',
+        jobId: 'order-' + order.id + '-1',
       };
     }
-    if (order_info !== null) {
-      await this.redisPubClient.set(
-        `cityorder${order_info.id}`,
-        JSON.stringify(order_info),
-        'EX',
-        4 * 60,
-      );
-      await searchDriver(
-        this.drivers,
-        order_info,
-        this.io,
-        this.redisAsyncClient,
-        this.redisPubClient,
-        this.db,
-      );
-      let job = await this.queue.getJob(order_info.jobId);
-      await job?.remove();
-      await this.queue.add(order_info, {
-        jobId: order_info.jobId,
-        delay: this.skip_time,
-      });
 
-      let queues = await this.queue.count()
-      this.logger.debug("Queue", JSON.stringify(queues))
-      return response.status(200).json({
-        success: true,
-      });
-    } else {
-      return response.status(200).json({
-        success: false,
-      });
+    try {
+      if (order_info !== null) {
+        await this.redisPubClient.set(
+          `cityorder${order_info.id}`,
+          JSON.stringify(order_info),
+          'EX',
+          4 * 60,
+        );
+        await searchDriver(
+          this.drivers,
+          order_info,
+          this.io,
+          this.redisAsyncClient,
+          this.redisPubClient,
+          this.db,
+        );
+        let job = await this.queue.getJob(order_info.jobId);
+        await job?.remove();
+        await this.queue.add(order_info, {
+          jobId: order_info.jobId,
+          delay: this.skip_time,
+        });
+  
+        return response.status(200).json({
+          success: true,
+        });
+      } else {
+        return response.status(200).json({
+          success: false,
+        });
+      }
+    } catch(e) {
+      this.logger.error("Error in searchDrivers function: ", e)
     }
+    
   }
 
   async searchDriversSkip(request: Request, response: Response) {
-    let order_info_string = await this.redisAsyncClient.get(
-      `cityorder${request.params.id}`,
-    );
-    if (order_info_string == null) {
+    let order_info_string: string | null
+    try {
+      order_info_string = await this.redisAsyncClient.get(
+        `cityorder${request.params.id}`,
+      );
+    } catch(e) {
+      this.logger.error("Error in searchDriversSkip function while getting data from redis: ", e)
+    }
+
+    try {
+
+      if (order_info_string == null) {
+        return response.status(200).json({
+          success: true,
+        });
+      } else {
+        let order_info: OrderInfo = JSON.parse(order_info_string);
+        let job = await this.queue.getJob(order_info.jobId);
+        
+        await job?.remove();
+        order_info.attempts = order_info.attempts + 1;
+        order_info.jobId =
+          'order-' + order_info.id + '-' + order_info.attempts;
+        
+        await this.redisPubClient.set(
+          `cityorder${order_info.id}`,
+          JSON.stringify(order_info),
+          'EX',
+          4 * 60,
+        );
+        
+        await searchDriver(
+          this.drivers,
+          order_info,
+          this.io,
+          this.redisAsyncClient,
+          this.redisPubClient,
+          this.db,
+        );
+
+        let lastjob = await this.queue.getJob(order_info.jobId);
+        await lastjob?.remove();
+        await this.queue.add(order_info, {
+          jobId: order_info.jobId,
+          delay: this.skip_time,
+        });
+      }
       return response.status(200).json({
         success: true,
       });
-    } else {
-      let order_info = JSON.parse(order_info_string);
-      let job = await this.queue.getJob(order_info.jobId);
-      await job?.remove();
-      order_info.attempts = parseInt(order_info.attempts) + 1;
-      order_info.jobId =
-        'order-' + order_info.id + '-' + parseInt(order_info.attempts);
-      await this.redisPubClient.set(
-        `cityorder${order_info.id}`,
-        JSON.stringify(order_info),
-        'EX',
-        4 * 60,
-      );
-      await searchDriver(
-        this.drivers,
-        order_info,
-        this.io,
-        this.redisAsyncClient,
-        this.redisPubClient,
-        this.db,
-      );
-      let lastjob = await this.queue.getJob(order_info.jobId);
-      await lastjob?.remove();
-      await this.queue.add(order_info, {
-        jobId: order_info.jobId,
-        delay: this.skip_time,
-      });
+    } catch(e) {
+      this.logger.error("Error in searchDriversSkip function: ", e)
     }
-    return response.status(200).json({
-      success: true,
-    });
   }
 
   homePage(request: Request, response: Response): void {
@@ -186,56 +205,79 @@ export class AppService {
   }
 
   async searchDriversCancel(request: Request, response: Response) {
-    let order_info_string = await this.redisAsyncClient.get(
-      `cityorder${request.params.id}`,
-    );
-    if (order_info_string == null) {
-      return response.status(200).json({
-        success: true,
-      });
-    } else {
-      let order_info = JSON.parse(order_info_string);
-      for (let index = 1; index <= 10; index++) {
-        let lastjob = await this.queue.getJob(
-          'order-' + order_info.id + '-' + index,
-        );
-        await lastjob?.remove();
-      }
-      order_info.status = 'client_cancelled';
-      let driver_id = await this.redisAsyncClient.get(
-        `order_driver_${order_info.id}`,
+    let order_info_string: string | null
+    try {
+      order_info_string = await this.redisAsyncClient.get(
+        `cityorder${request.params.id}`,
       );
-      let socket_id = await this.redisAsyncClient.get(`siddriver${driver_id}`);
-      console.log(order_info, driver_id, socket_id);
-      this.io.server.to(socket_id).emit(`driver_orders`, {
-        id: order_info.id,
-        status: 'client_cancelled',
-      });
-      return response.status(200).json({
-        success: true,
-      });
+    } catch(e) {
+      this.logger.error("Error in searchDriversCancel function while getting data from redis: ", e)
+    }
+    
+    try {
+      if (order_info_string == null) {
+        return response.status(200).json({
+          success: true,
+        });
+      } else {
+        let order_info: OrderInfo = JSON.parse(order_info_string);
+        for (let index = 1; index <= 10; index++) {
+          let lastjob = await this.queue.getJob(
+            'order-' + order_info.id + '-' + index,
+          );
+          await lastjob?.remove();
+        }
+
+        order_info.status = OrderStatuses.ClientCancelled;
+        let driver_id: string = await this.redisAsyncClient.get(
+          `order_driver_${order_info.id}`,
+        );
+
+        let socket_id: string = await this.redisAsyncClient.get(`siddriver${driver_id}`);
+        console.log(order_info, driver_id, socket_id);
+        
+        this.io.server.to(socket_id).emit(`driver_orders`, {
+          id: order_info.id,
+          status: OrderStatuses.ClientCancelled,
+        });
+        return response.status(200).json({
+          success: true,
+        });
+      }
+    } catch(e) {
+      this.logger.error("Error in function searchDriversCancel: ", e)
     }
   }
 
   async searchDriversAccept(request: Request, response: Response) {
-    let order_info_string = await this.redisAsyncClient.get(
-      `cityorder${request.params.id}`,
-    );
-    if (order_info_string == null) {
-      return response.status(200).json({
-        success: true,
-      });
-    } else {
-      let order_info = JSON.parse(order_info_string);
-      for (let index = 1; index <= 10; index++) {
-        let lastjob = await this.queue.getJob(
-          'order-' + order_info.id + '-' + index,
-        );
-        await lastjob?.remove();
+    let order_info_string: string | null
+    try {
+      order_info_string = await this.redisAsyncClient.get(
+        `cityorder${request.params.id}`,
+      );
+    } catch(e) {
+      this.logger.error("Error in searchDriversAccept function while getting data from redis: ", e)
+    }
+
+    try {
+      if (order_info_string == null) {
+        return response.status(200).json({
+          success: true,
+        });
+      } else {
+        let order_info: OrderInfo = JSON.parse(order_info_string);
+        for (let index = 1; index <= 10; index++) {
+          let lastjob = await this.queue.getJob(
+            'order-' + order_info.id + '-' + index,
+          );
+          await lastjob?.remove();
+        }
+        return response.status(200).json({
+          success: true,
+        });
       }
-      return response.status(200).json({
-        success: true,
-      });
+    } catch(e) {
+      this.logger.error("Error in searchDriversAccept function: ", e)
     }
   }
 }

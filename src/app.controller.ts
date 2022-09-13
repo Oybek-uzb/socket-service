@@ -10,9 +10,8 @@ export class AppController {
   ) {}
 
   @MessagePattern()
-  async check(@Payload() data: any, @Ctx() context: RmqContext): Promise<void> {
-    console.log("Payload", data)
-    await this.appService.check(data, context);
+  async rmqConsume(@Payload() data: any, @Ctx() context: RmqContext): Promise<void> {
+    await this.appService.rmqConsume(data, context);
   }
 
   @Get('/search-drivers/:id')

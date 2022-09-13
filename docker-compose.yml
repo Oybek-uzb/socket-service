@@ -1,28 +1,29 @@
 version: '3.6'
 services:
-  # rabbit:
-  #   image: rabbitmq:latest
-  #   hostname: rabbitmq
-  #   environment:
-  #     - RABBITMQ_DEFAULT_USER=admin
-  #     - RABBITMQ_DEFAULT_PASS=mypass
-  #   ports:
-  #   - 5672:5672
-  #   restart: always
-  #   networks:
-  #   - test-network
+  rabbit:
+    image: rabbitmq:3-management
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=mypass
+    ports:
+    - "5672:5672"
+    - "15672:15672"
+    restart: always
+    networks:
+    - test-network
 
-  # redis:
-  #   image: redis
-  #   hostname: redis
-  #   ports:
-  #   - 6379:6379
-  #   restart: always
-  #   networks:
-  #   - test-network
+  redis:
+    image: redis:5.0.5
+    hostname: redis
+    ports:
+    - "6379:6379"
+    command: ["redis-server", "--bind", "redis", "--port", "6379"]
+    restart: always
+    networks:
+    - test-network
 
   app:
-    image: 8351641669ff
+    image: 75916499ecbd
     ports:
     - 3002:3002
     # depends_on:
