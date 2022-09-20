@@ -5,6 +5,7 @@ import Redis from 'ioredis';
 import { DatabaseService } from '../db/database.service';
 import { ServerGateway } from '../socket/socket.gateway';
 import { searchDriver } from '../utils/orders';
+import { EmitterService } from '../emitter/emitter.service';
 
 @Processor('order-processing')
 export class OrderProcessingConsumer {
@@ -16,6 +17,7 @@ export class OrderProcessingConsumer {
     @Inject('REDIS_GEO_CLIENT') private readonly drivers: Redis,
     private readonly io: ServerGateway,
     private readonly db: DatabaseService,
+    private readonly autoEmitter: EmitterService
   ) {}
   @Process()
   async processNamedJob(job: Job<any>, done: DoneCallback): Promise<any> {
@@ -37,6 +39,7 @@ export class OrderProcessingConsumer {
         this.redisAsyncClient,
         this.redisPubClient,
         this.db,
+        this.autoEmitter,
       );
       let lastjob = await job.queue.getJob(order_info.jobId);
       await lastjob?.remove();

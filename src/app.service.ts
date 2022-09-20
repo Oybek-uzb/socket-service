@@ -9,6 +9,9 @@ import { ServerGateway } from './socket/socket.gateway';
 import { RmqContext } from '@nestjs/microservices';
 import { EventBody } from './dto/event_body';
 import { CityOrder, Order, OrderInfo, OrderStatuses } from './dto/orders';
+import { EmitterService } from './emitter/emitter.service';
+import { EmitData, EmitDataForRedis } from './dto/emit_data';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AppService {
@@ -18,6 +21,7 @@ export class AppService {
   constructor(
     private readonly io: ServerGateway,
     private readonly db: DatabaseService,
+    private readonly autoEmitter: EmitterService,
     @Inject('REDIS_PUB_CLIENT') private readonly redisPubClient: Redis,
     @Inject('REDIS_SUB_CLIENT') private readonly redisSubClient: Redis,
     @Inject('REDIS_ASYNC_CLIENT') private readonly redisAsyncClient: Redis,
@@ -26,32 +30,58 @@ export class AppService {
   ) {}
 
   async rmqConsume(body: EventBody, context: RmqContext) {
-    let user_id: number, user_type: string, soc: string;
+    let user_id, user_type: string, soc: string;
     if (body.driver_id === undefined && body.client_id !== 0) {
       user_id = body.client_id;
       user_type = 'client';
       soc = 'client_orders';
       delete body.client_id;
     }
-    if (body.client_id === undefined && body.driver_id !== 0) {
+    if (body.client_id === undefined && body.driver_id !== undefined) {
       user_id = body.driver_id;
       user_type = 'driver';
       soc = 'driver_orders';
       delete body.driver_id;
     }
-    console.log(body, user_id, user_type, soc);
+    
+    body.emit_action_id = uuidv4();
+
     this.redisPubClient.get(
       `sid${user_type}${user_id}`,
       this.emitFromConsumer.bind(this, soc, body),
     );
   }
 
-  emitFromConsumer(soc: string, body: EventBody, err: Error, value: string) {
+  async emitFromConsumer(
+    soc: string,
+    body: EventBody,
+    err: Error,
+    value: string,
+  ) {
+    let emitData: EmitData;
+    let emitDataForRedis: EmitDataForRedis;
+
     if (err) {
       console.error('error');
       console.info('error order ' + body.id);
     } else {
-      this.io.server.to(value).emit(soc, body);
+      emitData = {
+        room: value,
+        socket: soc,
+        data: body,
+      };
+      emitDataForRedis = {
+        emit_data: emitData,
+        timer: null,
+        attempts: 0,
+        isReceived: false,
+      };
+      this.redisPubClient.set(
+        `${emitData.data.emit_action_id}`,
+        JSON.stringify(emitDataForRedis),
+      );
+      // this.io.server.to(value).emit(soc, body);
+      this.autoEmitter.emitTillReceived(emitData, this.io);
     }
   }
 
@@ -60,27 +90,22 @@ export class AppService {
     let order_info: OrderInfo;
     let sub_order: CityOrder;
     let order: Order;
-    
+
     try {
       [order] = await this.db.executeQuery(
         `SELECT * FROM orders WHERE id=${request.params.id} AND order_type='city' AND order_status='new'`,
       );
-      
+
       if (order) {
         [sub_order] = await this.db.executeQuery(
           `SELECT * FROM city_orders WHERE id=${order.order_id}`,
         );
       }
-      
     } catch (e) {
-      this.logger.error(e)
+      this.logger.error(e);
     }
-    
-    if (
-      order &&
-      sub_order &&
-      sub_order.points.points.length > 0
-    ) {
+
+    if (order && sub_order && sub_order.points.points.length > 0) {
       order_info = {
         id: order.id,
         client_id: order.client_id,
@@ -122,6 +147,7 @@ export class AppService {
           this.redisAsyncClient,
           this.redisPubClient,
           this.db,
+          this.autoEmitter
         );
         let job = await this.queue.getJob(order_info.jobId);
         await job?.remove();
@@ -129,7 +155,7 @@ export class AppService {
           jobId: order_info.jobId,
           delay: this.skip_time,
         });
-  
+
         return response.status(200).json({
           success: true,
         });
@@ -138,24 +164,25 @@ export class AppService {
           success: false,
         });
       }
-    } catch(e) {
-      this.logger.error("Error in searchDrivers function: ", e)
+    } catch (e) {
+      this.logger.error('Error in searchDrivers function: ', e);
     }
-    
   }
 
   async searchDriversSkip(request: Request, response: Response) {
-    let order_info_string: string | null
+    let order_info_string: string | null;
     try {
       order_info_string = await this.redisAsyncClient.get(
         `cityorder${request.params.id}`,
       );
-    } catch(e) {
-      this.logger.error("Error in searchDriversSkip function while getting data from redis: ", e)
+    } catch (e) {
+      this.logger.error(
+        'Error in searchDriversSkip function while getting data from redis: ',
+        e,
+      );
     }
 
     try {
-
       if (order_info_string == null) {
         return response.status(200).json({
           success: true,
@@ -163,19 +190,18 @@ export class AppService {
       } else {
         let order_info: OrderInfo = JSON.parse(order_info_string);
         let job = await this.queue.getJob(order_info.jobId);
-        
+
         await job?.remove();
         order_info.attempts = order_info.attempts + 1;
-        order_info.jobId =
-          'order-' + order_info.id + '-' + order_info.attempts;
-        
+        order_info.jobId = 'order-' + order_info.id + '-' + order_info.attempts;
+
         await this.redisPubClient.set(
           `cityorder${order_info.id}`,
           JSON.stringify(order_info),
           'EX',
           4 * 60,
         );
-        
+
         await searchDriver(
           this.drivers,
           order_info,
@@ -183,6 +209,7 @@ export class AppService {
           this.redisAsyncClient,
           this.redisPubClient,
           this.db,
+          this.autoEmitter
         );
 
         let lastjob = await this.queue.getJob(order_info.jobId);
@@ -195,8 +222,8 @@ export class AppService {
       return response.status(200).json({
         success: true,
       });
-    } catch(e) {
-      this.logger.error("Error in searchDriversSkip function: ", e)
+    } catch (e) {
+      this.logger.error('Error in searchDriversSkip function: ', e);
     }
   }
 
@@ -205,15 +232,18 @@ export class AppService {
   }
 
   async searchDriversCancel(request: Request, response: Response) {
-    let order_info_string: string | null
+    let order_info_string: string | null;
     try {
       order_info_string = await this.redisAsyncClient.get(
         `cityorder${request.params.id}`,
       );
-    } catch(e) {
-      this.logger.error("Error in searchDriversCancel function while getting data from redis: ", e)
+    } catch (e) {
+      this.logger.error(
+        'Error in searchDriversCancel function while getting data from redis: ',
+        e,
+      );
     }
-    
+
     try {
       if (order_info_string == null) {
         return response.status(200).json({
@@ -233,30 +263,60 @@ export class AppService {
           `order_driver_${order_info.id}`,
         );
 
-        let socket_id: string = await this.redisAsyncClient.get(`siddriver${driver_id}`);
-        console.log(order_info, driver_id, socket_id);
-        
-        this.io.server.to(socket_id).emit(`driver_orders`, {
-          id: order_info.id,
-          status: OrderStatuses.ClientCancelled,
-        });
+        let socket_id: string = await this.redisAsyncClient.get(
+          `siddriver${driver_id}`,
+        );
+
+        const emit_action_id = uuidv4();
+
+        const emitData: EmitData = {
+          data: {
+            id: order_info.id,
+            status: OrderStatuses.ClientCancelled,
+            emit_action_id,
+          },
+          room: socket_id,
+          socket: `driver_orders`,
+        };
+
+        const emitDataForRedis: EmitDataForRedis = {
+          emit_data: emitData,
+          timer: null,
+          attempts: 0,
+          isReceived: false,
+        };
+
+        this.redisPubClient.set(
+          `${emitData.data.emit_action_id}`,
+          JSON.stringify(emitDataForRedis),
+        );
+
+        this.autoEmitter.emitTillReceived(emitData, this.io);
+        // this.io.server.to(socket_id).emit(`driver_orders`, {
+        //   id: order_info.id,
+        //   status: OrderStatuses.ClientCancelled,
+        // });
+
         return response.status(200).json({
           success: true,
         });
       }
-    } catch(e) {
-      this.logger.error("Error in function searchDriversCancel: ", e)
+    } catch (e) {
+      this.logger.error('Error in function searchDriversCancel: ', e);
     }
   }
 
   async searchDriversAccept(request: Request, response: Response) {
-    let order_info_string: string | null
+    let order_info_string: string | null;
     try {
       order_info_string = await this.redisAsyncClient.get(
         `cityorder${request.params.id}`,
       );
-    } catch(e) {
-      this.logger.error("Error in searchDriversAccept function while getting data from redis: ", e)
+    } catch (e) {
+      this.logger.error(
+        'Error in searchDriversAccept function while getting data from redis: ',
+        e,
+      );
     }
 
     try {
@@ -276,8 +336,8 @@ export class AppService {
           success: true,
         });
       }
-    } catch(e) {
-      this.logger.error("Error in searchDriversAccept function: ", e)
+    } catch (e) {
+      this.logger.error('Error in searchDriversAccept function: ', e);
     }
   }
 }

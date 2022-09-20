@@ -1,10 +1,19 @@
+import Redis from 'ioredis';
+import { DatabaseService } from '../db/database.service';
+import { EmitData, EmitDataForRedis } from '../dto/emit_data';
+import { OrderInfo } from '../dto/orders';
+import { ServerGateway } from '../socket/socket.gateway';
+import { v4 as uuidv4 } from 'uuid';
+import { EmitterService } from 'src/emitter/emitter.service';
+
 export async function searchDriver(
-  drivers,
-  order_info,
-  io,
-  redisAsyncClient,
-  redisPubClient,
-  db,
+  drivers: Redis,
+  order_info: OrderInfo,
+  io: ServerGateway,
+  redisAsyncClient: Redis,
+  redisPubClient: Redis,
+  db: DatabaseService,
+  autoEmitter: EmitterService
 ): Promise<boolean> {
   let options = {
     withCoordinates: true,
@@ -15,6 +24,7 @@ export async function searchDriver(
     count: 20,
     accurate: true,
   };
+
   let drivers_list = await nearbyCall(drivers, options, order_info);
   if (drivers_list.length == 0) {
     return false;
@@ -65,10 +75,34 @@ export async function searchDriver(
   }
   if (order_info.attempts == 11) {
     let sid = await redisAsyncClient.get(`sidclient${order_info.client_id}`);
-    io.server.to(sid).emit(`client_orders`, {
-      id: order_info.id,
-      status: 'driver_not_found',
-    });
+    // io.server.to(sid).emit(`client_orders`, {
+    //   id: order_info.id,
+    //   status: 'driver_not_found',
+    // });
+
+    const msg = { id: order_info.id, status: 'driver_not_found' };
+
+    const emit_action_id = uuidv4();
+
+    const emitData: EmitData = {
+      data: { ...msg, emit_action_id },
+      room: sid,
+      socket: `client_orders`,
+    };
+
+    const emitDataForRedis: EmitDataForRedis = {
+      emit_data: emitData,
+      timer: null,
+      attempts: 0,
+      isReceived: false,
+    };
+
+    await redisAsyncClient.set(
+      `${emitData.data.emit_action_id}`,
+      JSON.stringify(emitDataForRedis),
+    );
+    
+    autoEmitter.emitTillReceived(emitData, io);
   }
   if (driver_id_to_send !== 0) {
     let socket_id = await redisAsyncClient.get(`siddriver${driver_id_to_send}`);
@@ -95,6 +129,7 @@ export async function searchDriver(
         redisAsyncClient,
         redisPubClient,
         db,
+        autoEmitter
       );
     } else {
       await redisPubClient.set(
@@ -103,7 +138,30 @@ export async function searchDriver(
         'EX',
         60 * 60,
       );
-      io.server.to(socket_id).emit(`driver_orders`, order_info);
+
+      const emit_action_id = uuidv4();
+
+      const emitData: EmitData = {
+        data: { ...order_info, emit_action_id },
+        room: socket_id,
+        socket: `driver_orders`,
+      };
+
+      const emitDataForRedis: EmitDataForRedis = {
+        emit_data: emitData,
+        timer: null,
+        attempts: 0,
+        isReceived: false,
+      };
+
+      redisPubClient.set(
+        `${emitData.data.emit_action_id}`,
+        JSON.stringify(emitDataForRedis),
+      );
+      
+      autoEmitter.emitTillReceived(emitData, io);
+
+      // io.server.to(socket_id).emit(`driver_orders`, order_info);
       return true;
     }
   } else {
@@ -120,7 +178,7 @@ export function nearbyCall(drivers, options, order_info): Promise<any> {
       { latitude: lat, longitude: lng },
       5000,
       options,
-      function (err, driver) {
+      function (err: Error, driver) {
         if (err) resolve([]);
         else {
           resolve(driver);

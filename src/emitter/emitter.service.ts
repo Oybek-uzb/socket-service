@@ -1,0 +1,58 @@
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import Redis from 'ioredis';
+import { EmitData, EmitDataForRedis } from '../dto/emit_data';
+import { ServerGateway } from '../socket/socket.gateway';
+
+@Injectable()
+export class EmitterService {
+  private readonly logger = new Logger(EmitterService.name);
+
+  constructor(
+    @Inject('REDIS_ASYNC_CLIENT') private readonly redisAsyncClient: Redis
+  ) {}
+
+  async emitTillReceived(emitData: EmitData, io: ServerGateway) {
+    const data: string = await this.redisAsyncClient.get(
+      `${emitData.data.emit_action_id}`,
+    );
+
+    const parsedData: EmitDataForRedis = JSON.parse(data);
+
+    if (!parsedData.timer) {
+      const timer = setInterval(
+        this.emitContinuously.bind(this, emitData, io),
+        3000,
+      );
+      parsedData.timer = JSON.stringify(timer[Symbol.toPrimitive]());
+      parsedData.attempts = 1;
+      await this.redisAsyncClient.set(
+        `${emitData.data.emit_action_id}`,
+        JSON.stringify(parsedData),
+      );
+    }
+  }
+
+  async emitContinuously(emitData: EmitData, io: ServerGateway) {
+    const data: string = await this.redisAsyncClient.get(
+      `${emitData.data.emit_action_id}`,
+    );
+
+    this.logger.debug(`emitContinuously action_id:${emitData.data.emit_action_id}: ${data}`)
+
+    if (data) {
+      const parsedData: EmitDataForRedis = JSON.parse(data);
+
+      if (parsedData.attempts >= 3) {
+        clearInterval(parsedData.timer);
+        await this.redisAsyncClient.del(`${emitData.data.emit_action_id}`);
+      } else {
+        parsedData.attempts++;
+        await this.redisAsyncClient.set(
+          `${emitData.data.emit_action_id}`,
+          JSON.stringify(parsedData),
+        );
+        io.server.to(emitData.room).emit(emitData.socket, emitData.data);
+      }
+    }
+  }
+}

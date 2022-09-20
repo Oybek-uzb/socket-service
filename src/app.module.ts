@@ -4,10 +4,13 @@ import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './db/database.module';
 import { RmqModule } from './rmq/rmq.module';
-import { ServerGateway } from './socket/socket.gateway';
 import { RedisModule } from './redis/redis.module';
 import { BullModule } from '@nestjs/bull';
 import { OrderProcessingConsumer } from './bull/queue.processor';
+import { EmitterService } from './emitter/emitter.service';
+import { SocketModule } from './socket/socket.module';
+import { EmitterModule } from './emitter/emitter.module';
+import { ServerGateway } from './socket/socket.gateway';
 
 @Module({
   imports: [
@@ -25,8 +28,15 @@ import { OrderProcessingConsumer } from './bull/queue.processor';
     RedisModule,
     DatabaseModule,
     RmqModule,
+    SocketModule,
+    EmitterModule
   ],
   controllers: [AppController],
-  providers: [AppService, ServerGateway, OrderProcessingConsumer],
+  providers: [
+    AppService,
+    // ServerGateway,
+    OrderProcessingConsumer,
+  ],
+  // exports: [ServerGateway]
 })
 export class AppModule {}

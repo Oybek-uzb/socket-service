@@ -1,16 +1,23 @@
 import { Controller, Get, Req, Res } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Request, Response } from 'express';
-import { Ctx, MessagePattern, Payload, RmqContext } from '@nestjs/microservices';
+import {
+  Ctx,
+  MessagePattern,
+  Payload,
+  RmqContext,
+} from '@nestjs/microservices';
+import { EventBody } from './dto/event_body';
 
 @Controller()
 export class AppController {
-  constructor(
-    private readonly appService: AppService,
-  ) {}
+  constructor(private readonly appService: AppService) {}
 
   @MessagePattern()
-  async rmqConsume(@Payload() data: any, @Ctx() context: RmqContext): Promise<void> {
+  async rmqConsume(
+    @Payload() data: EventBody,
+    @Ctx() context: RmqContext,
+  ): Promise<void> {
     await this.appService.rmqConsume(data, context);
   }
 

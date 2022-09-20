@@ -12,6 +12,10 @@ import Redis from 'ioredis';
 import * as jwtDecode from 'jwt-decode';
 import { DatabaseService } from '../db/database.service';
 import * as moment from 'moment';
+import { NextFunction } from 'express';
+import { EmitterService } from '../emitter/emitter.service';
+import { EmitData, EmitDataForRedis } from '../dto/emit_data';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 @WebSocketGateway(3100, { cors: true })
@@ -23,12 +27,14 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @Inject('REDIS_PUB_CLIENT') private readonly redisPubClient: Redis,
     @Inject('REDIS_SUB_CLIENT') private readonly redisSubClient: Redis,
     @Inject('REDIS_GEO_CLIENT') private readonly drivers: any,
+    @Inject('REDIS_ASYNC_CLIENT') private readonly redisAsyncClient: Redis,
     private readonly db: DatabaseService,
+    private readonly autoEmitter: EmitterService,
   ) {}
 
   afterInit(server: Server) {
     server.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
-    server.use(async (socket, next) => {
+    server.use(async (socket: Socket, next: NextFunction) => {
       const header = socket.handshake.headers['authorization'];
       let is_valid = await this.isValidJwt(header, socket);
       if (is_valid) {
@@ -114,8 +120,29 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (err) {
       console.error('error');
     } else {
-      console.log(msg);
-      this.server.to(value).emit(`messages`, msg);
+      const emit_action_id = uuidv4();
+
+      const emitData: EmitData = {
+        data: { ...msg, emit_action_id },
+        room: value,
+        socket: `messages`,
+      };
+
+      const emitDataForRedis: EmitDataForRedis = {
+        emit_data: emitData,
+        timer: null,
+        attempts: 0,
+        isReceived: false,
+      };
+
+      this.redisPubClient.set(
+        `${emitData.data.emit_action_id}`,
+        JSON.stringify(emitDataForRedis),
+      );
+      this.autoEmitter.emitTillReceived(emitData, this);
+
+      // this.server.to(value).emit(`messages`, msg);
+
       await this.db.executeQuery(
         `INSERT INTO chat_messages (user_type,driver_id,client_id,ride_id,order_id,message_type,content,created_at) VALUES ('${
           msg.from
@@ -136,11 +163,33 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
   }
 
-  emitToClientLocation(msg, err, value) {
+  async emitToClientLocation(msg, err, value) {
     if (err) {
       console.error('error');
     } else {
-      this.server.to(value).emit(`client_location`, msg);
+      const emit_action_id = uuidv4();
+
+      const emitData: EmitData = {
+        data: { ...msg, emit_action_id },
+        room: value,
+        socket: `client_location`,
+      };
+
+      const emitDataForRedis: EmitDataForRedis = {
+        emit_data: emitData,
+        timer: null,
+        attempts: 0,
+        isReceived: false,
+      };
+
+      this.redisPubClient.set(
+        `${emitData.data.emit_action_id}`,
+        JSON.stringify(emitDataForRedis),
+      );
+      
+      this.autoEmitter.emitTillReceived(emitData, this);
+
+      // this.server.to(value).emit(`client_location`, msg);
     }
   }
 
@@ -187,15 +236,48 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  emitToDriverLocation(msg, err, value) {
+  async emitToDriverLocation(msg, err, value) {
     if (err) {
       console.error('error');
     } else {
+      // const emit_action_id = uuidv4();
+
+      // const emitData: EmitData = {
+      //   data: { ...msg, emit_action_id },
+      //   room: value,
+      //   socket: `driver_location`,
+      // };
+
+      // const emitDataForRedis: EmitDataForRedis = {
+      //   emit_data: emitData,
+      //   timer: null,
+      //   attempts: 0,
+      //   isReceived: false,
+      // };
+
+      // await this.redisAsyncClient.set(
+      //   `${emitData.data.emit_action_id}`,
+      //   JSON.stringify(emitDataForRedis),
+      // );
+      
+      // this.autoEmitter.emitTillReceived(emitData, this);
       this.server.to(value).emit(`driver_location`, msg);
     }
   }
 
   handleDisconnect(socket: Socket) {
     console.log('user disconnected');
+  }
+
+  @SubscribeMessage('received')
+  async handleReceived(socket: Socket, msg: any) {
+    console.log("received", msg);
+    
+    const data = await this.redisAsyncClient.get(`${msg}`);
+    const parsedData: EmitDataForRedis = JSON.parse(data);
+
+    clearInterval(parsedData.timer);
+
+    await this.redisAsyncClient.del(`${msg}`);
   }
 }

@@ -12,7 +12,7 @@ export class DatabaseService {
     this.logger.debug(`Executing query: ${queryText} (${values})`);
 
     return this.client
-      .query({query: queryText, values})
+      .query({ query: queryText, values })
       .then((result: [unknown[], unknown]): any => {
         this.logger.debug(`Executed query, result size ${result[0].length}`);
         return result[0];
