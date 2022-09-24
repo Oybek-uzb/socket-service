@@ -102,7 +102,7 @@ export async function searchDriver(
       JSON.stringify(emitDataForRedis),
     );
     
-    autoEmitter.emitTillReceived(emitData, io);
+    await autoEmitter.emitTillReceived(emitData, io);
   }
   if (driver_id_to_send !== 0) {
     let socket_id = await redisAsyncClient.get(`siddriver${driver_id_to_send}`);
@@ -120,7 +120,6 @@ export async function searchDriver(
       'EX',
       5 * 60,
     );
-    console.log(driver_id_to_send);
     if (socket_id == null) {
       return await searchDriver(
         drivers,
@@ -154,12 +153,12 @@ export async function searchDriver(
         isReceived: false,
       };
 
-      redisPubClient.set(
+      await redisAsyncClient.set(
         `${emitData.data.emit_action_id}`,
         JSON.stringify(emitDataForRedis),
       );
       
-      autoEmitter.emitTillReceived(emitData, io);
+      await autoEmitter.emitTillReceived(emitData, io);
 
       // io.server.to(socket_id).emit(`driver_orders`, order_info);
       return true;

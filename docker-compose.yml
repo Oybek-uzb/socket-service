@@ -2,36 +2,45 @@ version: '3.6'
 services:
   rabbit:
     image: rabbitmq:3-management
+    hostname: rabbitmq
     environment:
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=mypass
+      RABBITMQ_DEFAULT_USER: "guest"
+      RABBITMQ_DEFAULT_PASS: "guest"
+    command: rabbitmq-server
     ports:
     - "5672:5672"
     - "15672:15672"
     restart: always
     networks:
     - test-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "amqp://rabbitmq:15672" ]
+      interval: 30s
+      timeout: 30s
+      retries: 5
 
   redis:
     image: redis:5.0.5
     hostname: redis
     ports:
     - "6379:6379"
-    command: ["redis-server", "--bind", "redis", "--port", "6379"]
+    command: redis-server
     restart: always
     networks:
     - test-network
 
   app:
-    image: 75916499ecbd
     ports:
-    - 3002:3002
-    # depends_on:
-    #   - redis
-    #   - rabbit
-    # links: [rabbit, redis]
+    - "3002:3002"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - rabbit
+      - redis
+    links: [rabbit, redis]
     networks:
-    - test-network
+      - test-network
 networks:
   test-network:
     driver: bridge

@@ -2,27 +2,31 @@ import * as asyncRedis from 'async-redis';
 import * as geoRedis from 'georedis';
 import { Module } from '@nestjs/common';
 import Redis from 'ioredis';
+import {ConfigModule, ConfigService} from "@nestjs/config";
 
 @Module({
+  imports: [ConfigModule],
   providers: [
     {
-      provide: 'REDIS_OPTIONS',
-      useValue: {
-        url: 'redis://localhost:6379',
-      },
-    },
-    {
-      inject: ['REDIS_OPTIONS'],
+      inject: [ConfigService],
       provide: 'REDIS_PUB_CLIENT',
-      useFactory: async (options: { url: string }) => {
-        return new Redis();
+      useFactory: async (configService: ConfigService) => {
+        const pubClient = new Redis(configService.get<number>('REDIS_PORT'), configService.get<string>('REDIS_HOST'));
+        pubClient.on("error", (err) => {
+          console.log("Redis PubClient error: ", err)
+        })
+        return pubClient;
       },
     },
     {
-      inject: ['REDIS_OPTIONS'],
+      inject: [ConfigService],
       provide: 'REDIS_SUB_CLIENT',
-      useFactory: async (options: { url: string }) => {
-        return new Redis();
+      useFactory: async (configService: ConfigService) => {
+        const subClient = new Redis(configService.get<number>('REDIS_PORT'), configService.get<string>('REDIS_HOST'));
+        subClient.on("error", (err) => {
+          console.log("Redis SubClient error: ", err)
+        })
+        return subClient;
       },
     },
     {

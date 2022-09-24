@@ -5,8 +5,6 @@ import { ServerGateway } from '../socket/socket.gateway';
 
 @Injectable()
 export class EmitterService {
-  private readonly logger = new Logger(EmitterService.name);
-
   constructor(
     @Inject('REDIS_ASYNC_CLIENT') private readonly redisAsyncClient: Redis
   ) {}
@@ -36,9 +34,6 @@ export class EmitterService {
     const data: string = await this.redisAsyncClient.get(
       `${emitData.data.emit_action_id}`,
     );
-
-    this.logger.debug(`emitContinuously action_id:${emitData.data.emit_action_id}: ${data}`)
-
     if (data) {
       const parsedData: EmitDataForRedis = JSON.parse(data);
 

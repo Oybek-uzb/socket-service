@@ -76,12 +76,12 @@ export class AppService {
         attempts: 0,
         isReceived: false,
       };
-      this.redisPubClient.set(
+      await this.redisAsyncClient.set(
         `${emitData.data.emit_action_id}`,
         JSON.stringify(emitDataForRedis),
       );
       // this.io.server.to(value).emit(soc, body);
-      this.autoEmitter.emitTillReceived(emitData, this.io);
+      await this.autoEmitter.emitTillReceived(emitData, this.io);
     }
   }
 
@@ -286,12 +286,12 @@ export class AppService {
           isReceived: false,
         };
 
-        this.redisPubClient.set(
+        await this.redisAsyncClient.set(
           `${emitData.data.emit_action_id}`,
           JSON.stringify(emitDataForRedis),
         );
 
-        this.autoEmitter.emitTillReceived(emitData, this.io);
+        await this.autoEmitter.emitTillReceived(emitData, this.io);
         // this.io.server.to(socket_id).emit(`driver_orders`, {
         //   id: order_info.id,
         //   status: OrderStatuses.ClientCancelled,

@@ -135,11 +135,11 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         isReceived: false,
       };
 
-      this.redisPubClient.set(
+      await this.redisAsyncClient.set(
         `${emitData.data.emit_action_id}`,
         JSON.stringify(emitDataForRedis),
       );
-      this.autoEmitter.emitTillReceived(emitData, this);
+      await this.autoEmitter.emitTillReceived(emitData, this);
 
       // this.server.to(value).emit(`messages`, msg);
 
@@ -182,12 +182,12 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
         isReceived: false,
       };
 
-      this.redisPubClient.set(
+      await this.redisAsyncClient.set(
         `${emitData.data.emit_action_id}`,
         JSON.stringify(emitDataForRedis),
       );
       
-      this.autoEmitter.emitTillReceived(emitData, this);
+      await this.autoEmitter.emitTillReceived(emitData, this);
 
       // this.server.to(value).emit(`client_location`, msg);
     }
@@ -271,8 +271,6 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('received')
   async handleReceived(socket: Socket, msg: any) {
-    console.log("received", msg);
-    
     const data = await this.redisAsyncClient.get(`${msg}`);
     const parsedData: EmitDataForRedis = JSON.parse(data);
 

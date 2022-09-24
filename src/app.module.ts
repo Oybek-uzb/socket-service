@@ -21,7 +21,7 @@ import { ServerGateway } from './socket/socket.gateway';
     BullModule.registerQueue({
       name: 'order-processing',
       redis: {
-        host: 'localhost',
+        host: 'redis',
         port: 6379,
       },
     }),
@@ -34,9 +34,7 @@ import { ServerGateway } from './socket/socket.gateway';
   controllers: [AppController],
   providers: [
     AppService,
-    // ServerGateway,
     OrderProcessingConsumer,
   ],
-  // exports: [ServerGateway]
 })
 export class AppModule {}

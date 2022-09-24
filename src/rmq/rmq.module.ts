@@ -1,14 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import {ConfigModule} from "@nestjs/config";
 
 @Module({
   imports: [
+    ConfigModule,
     ClientsModule.register([
       {
         name: 'SOCKET_SERVICE',
         transport: Transport.RMQ,
         options: {
-          urls: ['amqp://localhost:5672'],
+          urls: [process.env.RABBIT_MQ_URI],
           queue: 'socket-service',
           queueOptions: {
             durable: false,
