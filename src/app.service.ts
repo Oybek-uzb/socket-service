@@ -144,7 +144,6 @@ export class AppService {
           'EX',
           4 * 60,
         );
-        this.logger.debug("before searchDriver")
         await searchDriver(
           this.drivers,
           order_info,
@@ -154,7 +153,6 @@ export class AppService {
           this.db,
           this.autoEmitter
         );
-        this.logger.debug("after searchDriver")
         let job = await this.queue.getJob(order_info.jobId);
         await job?.remove();
         await this.queue.add(order_info, {

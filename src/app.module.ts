@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ConfigModule } from '@nestjs/config';
+import {ConfigModule, ConfigService} from '@nestjs/config';
 import { DatabaseModule } from './db/database.module';
 import { RmqModule } from './rmq/rmq.module';
 import { RedisModule } from './redis/redis.module';
@@ -21,8 +21,8 @@ import { ServerGateway } from './socket/socket.gateway';
     BullModule.registerQueue({
       name: 'order-processing',
       redis: {
-        host: 'redis',
-        port: 6379,
+        host: process.env.REDIS_HOST,
+        port: +process.env.REDIS_PORT,
       },
     }),
     RedisModule,
