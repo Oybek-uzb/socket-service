@@ -61,27 +61,31 @@ export class AppService {
     let emitData: EmitData;
     let emitDataForRedis: EmitDataForRedis;
 
-    if (err) {
-      console.error('error');
-      console.info('error order ' + body.id);
-    } else {
-      emitData = {
-        room: value,
-        socket: soc,
-        data: body,
-      };
-      emitDataForRedis = {
-        emit_data: emitData,
-        timer: null,
-        attempts: 0,
-        isReceived: false,
-      };
-      await this.redisAsyncClient.set(
-        `${emitData.data.emit_action_id}`,
-        JSON.stringify(emitDataForRedis),
-      );
-      // this.io.server.to(value).emit(soc, body);
-      await this.autoEmitter.emitTillReceived(emitData, this.io);
+    try {
+      if (err) {
+        console.error('error');
+        console.info('error order ' + body.id);
+      } else {
+        emitData = {
+          room: value,
+          socket: soc,
+          data: body,
+        };
+        emitDataForRedis = {
+          emit_data: emitData,
+          timer: null,
+          attempts: 0,
+          isReceived: false,
+        };
+        await this.redisAsyncClient.set(
+            `${emitData.data.emit_action_id}`,
+            JSON.stringify(emitDataForRedis),
+        );
+        // this.io.server.to(value).emit(soc, body);
+        await this.autoEmitter.emitTillReceived(emitData, this.io);
+      }
+    } catch (e) {
+        this.logger.error("Error in function emitFromConsumer: ", e)
     }
   }
 
@@ -140,6 +144,7 @@ export class AppService {
           'EX',
           4 * 60,
         );
+        this.logger.debug("before searchDriver")
         await searchDriver(
           this.drivers,
           order_info,
@@ -149,6 +154,7 @@ export class AppService {
           this.db,
           this.autoEmitter
         );
+        this.logger.debug("after searchDriver")
         let job = await this.queue.getJob(order_info.jobId);
         await job?.remove();
         await this.queue.add(order_info, {
@@ -165,7 +171,7 @@ export class AppService {
         });
       }
     } catch (e) {
-      this.logger.error('Error in searchDrivers function: ', e);
+        this.logger.error('Error in searchDrivers function: ', e);
     }
   }
 

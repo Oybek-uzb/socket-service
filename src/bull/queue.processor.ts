@@ -21,33 +21,37 @@ export class OrderProcessingConsumer {
   ) {}
   @Process()
   async processNamedJob(job: Job<any>, done: DoneCallback): Promise<any> {
-    if (job.data.attempts <= 10) {
-      let order_info = job.data;
-      order_info.attempts = parseInt(order_info.attempts) + 1;
-      order_info.jobId =
-        'order-' + order_info.id + '-' + parseInt(order_info.attempts);
-      await this.redisPubClient.set(
-        `cityorder${job.data.id}`,
-        JSON.stringify(order_info),
-        'EX',
-        4 * 60,
-      );
-      await searchDriver(
-        this.drivers,
-        order_info,
-        this.io,
-        this.redisAsyncClient,
-        this.redisPubClient,
-        this.db,
-        this.autoEmitter,
-      );
-      let lastjob = await job.queue.getJob(order_info.jobId);
-      await lastjob?.remove();
-      await job.queue.add(order_info, {
-        jobId: order_info.jobId,
-        delay: this.skip_time,
-      });
+    try {
+      if (job.data.attempts <= 10) {
+        let order_info = job.data;
+        order_info.attempts = parseInt(order_info.attempts) + 1;
+        order_info.jobId =
+            'order-' + order_info.id + '-' + parseInt(order_info.attempts);
+        await this.redisPubClient.set(
+            `cityorder${job.data.id}`,
+            JSON.stringify(order_info),
+            'EX',
+            4 * 60,
+        );
+        await searchDriver(
+            this.drivers,
+            order_info,
+            this.io,
+            this.redisAsyncClient,
+            this.redisPubClient,
+            this.db,
+            this.autoEmitter,
+        );
+        let lastjob = await job.queue.getJob(order_info.jobId);
+        await lastjob?.remove();
+        await job.queue.add(order_info, {
+          jobId: order_info.jobId,
+          delay: this.skip_time,
+        });
+      }
+      done();
+    } catch (e) {
+        console.log("Error in function processNamedJob: ", e)
     }
-    done();
   }
 }

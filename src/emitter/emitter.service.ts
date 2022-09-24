@@ -10,44 +10,53 @@ export class EmitterService {
   ) {}
 
   async emitTillReceived(emitData: EmitData, io: ServerGateway) {
-    const data: string = await this.redisAsyncClient.get(
-      `${emitData.data.emit_action_id}`,
-    );
-
-    const parsedData: EmitDataForRedis = JSON.parse(data);
-
-    if (!parsedData.timer) {
-      const timer = setInterval(
-        this.emitContinuously.bind(this, emitData, io),
-        3000,
-      );
-      parsedData.timer = JSON.stringify(timer[Symbol.toPrimitive]());
-      parsedData.attempts = 1;
-      await this.redisAsyncClient.set(
+    try {
+      const data: string = await this.redisAsyncClient.get(
         `${emitData.data.emit_action_id}`,
-        JSON.stringify(parsedData),
       );
+
+      const parsedData: EmitDataForRedis = JSON.parse(data);
+
+      if (!parsedData.timer) {
+        const timer = setInterval(
+          this.emitContinuously.bind(this, emitData, io),
+          3000,
+        );
+        parsedData.timer = JSON.stringify(timer[Symbol.toPrimitive]());
+        parsedData.attempts = 1;
+      }
+
+      await this.redisAsyncClient.set(
+          `${emitData.data.emit_action_id}`,
+          JSON.stringify(parsedData),
+      )
+    } catch (e) {
+      console.log("Error in function emitTillReceived: ", e)
     }
   }
 
   async emitContinuously(emitData: EmitData, io: ServerGateway) {
-    const data: string = await this.redisAsyncClient.get(
-      `${emitData.data.emit_action_id}`,
-    );
-    if (data) {
-      const parsedData: EmitDataForRedis = JSON.parse(data);
+    try {
+      const data: string = await this.redisAsyncClient.get(
+        `${emitData.data.emit_action_id}`,
+      );
+      if (data) {
+        const parsedData: EmitDataForRedis = JSON.parse(data);
 
-      if (parsedData.attempts >= 3) {
-        clearInterval(parsedData.timer);
-        await this.redisAsyncClient.del(`${emitData.data.emit_action_id}`);
-      } else {
-        parsedData.attempts++;
-        await this.redisAsyncClient.set(
-          `${emitData.data.emit_action_id}`,
-          JSON.stringify(parsedData),
-        );
-        io.server.to(emitData.room).emit(emitData.socket, emitData.data);
+        if (parsedData.attempts >= 3) {
+          clearInterval(parsedData.timer);
+          await this.redisAsyncClient.del(`${emitData.data.emit_action_id}`);
+        } else {
+          parsedData.attempts++;
+          await this.redisAsyncClient.set(
+              `${emitData.data.emit_action_id}`,
+              JSON.stringify(parsedData),
+          );
+          io.server.to(emitData.room).emit(emitData.socket, emitData.data);
+        }
       }
+    } catch (e) {
+        console.log("Error in emitContinuously function: ", e)
     }
   }
 }
