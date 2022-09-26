@@ -51,4 +51,9 @@ export class AppController {
   homePage(@Req() request: Request, @Res() response: Response): void {
     return this.appService.homePage(request, response);
   }
+
+  @Get('/all-online-drivers')
+  async getAllOnlineDrivers() {
+    return await this.appService.getAllOnlineDrivers();
+  }
 }

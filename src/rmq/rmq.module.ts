@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import {ConfigModule} from "@nestjs/config";
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
@@ -11,7 +11,7 @@ import {ConfigModule} from "@nestjs/config";
         transport: Transport.RMQ,
         options: {
           urls: [process.env.RABBIT_MQ_URI],
-          queue: 'socket-service',
+          queue: process.env.RABBIT_MQ_SOCKET_SERVICE_QUEUE,
           queueOptions: {
             durable: false,
           },

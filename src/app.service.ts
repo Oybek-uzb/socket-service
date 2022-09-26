@@ -9,9 +9,7 @@ import { ServerGateway } from './socket/socket.gateway';
 import { RmqContext } from '@nestjs/microservices';
 import { EventBody } from './dto/event_body';
 import { CityOrder, Order, OrderInfo, OrderStatuses } from './dto/orders';
-import { EmitterService } from './emitter/emitter.service';
-import { EmitData, EmitDataForRedis } from './dto/emit_data';
-import { v4 as uuidv4 } from 'uuid';
+import { Driver } from './dto/driver';
 
 @Injectable()
 export class AppService {
@@ -21,11 +19,10 @@ export class AppService {
   constructor(
     private readonly io: ServerGateway,
     private readonly db: DatabaseService,
-    private readonly autoEmitter: EmitterService,
     @Inject('REDIS_PUB_CLIENT') private readonly redisPubClient: Redis,
     @Inject('REDIS_SUB_CLIENT') private readonly redisSubClient: Redis,
     @Inject('REDIS_ASYNC_CLIENT') private readonly redisAsyncClient: Redis,
-    @Inject('REDIS_GEO_CLIENT') private readonly drivers: Redis,
+    @Inject('REDIS_GEO_CLIENT') private readonly drivers: any,
     @InjectQueue('order-processing') private readonly queue: Queue,
   ) {}
 
@@ -43,8 +40,6 @@ export class AppService {
       soc = 'driver_orders';
       delete body.driver_id;
     }
-    
-    body.emit_action_id = uuidv4();
 
     this.redisPubClient.get(
       `sid${user_type}${user_id}`,
@@ -58,34 +53,15 @@ export class AppService {
     err: Error,
     value: string,
   ) {
-    let emitData: EmitData;
-    let emitDataForRedis: EmitDataForRedis;
-
     try {
       if (err) {
         console.error('error');
         console.info('error order ' + body.id);
       } else {
-        emitData = {
-          room: value,
-          socket: soc,
-          data: body,
-        };
-        emitDataForRedis = {
-          emit_data: emitData,
-          timer: null,
-          attempts: 0,
-          isReceived: false,
-        };
-        await this.redisAsyncClient.set(
-            `${emitData.data.emit_action_id}`,
-            JSON.stringify(emitDataForRedis),
-        );
-        // this.io.server.to(value).emit(soc, body);
-        await this.autoEmitter.emitTillReceived(emitData, this.io);
+        this.io.server.to(value).emit(soc, body);
       }
     } catch (e) {
-        this.logger.error("Error in function emitFromConsumer: ", e)
+      this.logger.error('Error in function emitFromConsumer: ', e);
     }
   }
 
@@ -151,7 +127,6 @@ export class AppService {
           this.redisAsyncClient,
           this.redisPubClient,
           this.db,
-          this.autoEmitter
         );
         let job = await this.queue.getJob(order_info.jobId);
         await job?.remove();
@@ -169,7 +144,7 @@ export class AppService {
         });
       }
     } catch (e) {
-        this.logger.error('Error in searchDrivers function: ', e);
+      this.logger.error('Error in searchDrivers function: ', e);
     }
   }
 
@@ -213,7 +188,6 @@ export class AppService {
           this.redisAsyncClient,
           this.redisPubClient,
           this.db,
-          this.autoEmitter
         );
 
         let lastjob = await this.queue.getJob(order_info.jobId);
@@ -271,35 +245,10 @@ export class AppService {
           `siddriver${driver_id}`,
         );
 
-        const emit_action_id = uuidv4();
-
-        const emitData: EmitData = {
-          data: {
-            id: order_info.id,
-            status: OrderStatuses.ClientCancelled,
-            emit_action_id,
-          },
-          room: socket_id,
-          socket: `driver_orders`,
-        };
-
-        const emitDataForRedis: EmitDataForRedis = {
-          emit_data: emitData,
-          timer: null,
-          attempts: 0,
-          isReceived: false,
-        };
-
-        await this.redisAsyncClient.set(
-          `${emitData.data.emit_action_id}`,
-          JSON.stringify(emitDataForRedis),
-        );
-
-        await this.autoEmitter.emitTillReceived(emitData, this.io);
-        // this.io.server.to(socket_id).emit(`driver_orders`, {
-        //   id: order_info.id,
-        //   status: OrderStatuses.ClientCancelled,
-        // });
+        this.io.server.to(socket_id).emit(`driver_orders`, {
+          id: order_info.id,
+          status: OrderStatuses.ClientCancelled,
+        });
 
         return response.status(200).json({
           success: true,
@@ -343,5 +292,30 @@ export class AppService {
     } catch (e) {
       this.logger.error('Error in searchDriversAccept function: ', e);
     }
+  }
+
+  async getAllOnlineDrivers(): Promise<any> {
+
+    const options = {
+      withCoordinates: true,
+      withHashes: false,
+      withDistances: true,
+      order: 'ASC',
+      units: 'km',
+    }
+
+    let drivers: Driver[];
+
+    const [ latitude, longitude ] = [41, 69]
+
+    this.drivers.radius({ latitude, longitude }, 10, options, (err, driversList) => {
+      if (err) {
+        console.log(err)
+      } else {
+        console.log(driversList)
+      }
+    })
+
+    return JSON.stringify("ok");
   }
 }

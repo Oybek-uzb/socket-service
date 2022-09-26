@@ -5,7 +5,6 @@ import Redis from 'ioredis';
 import { DatabaseService } from '../db/database.service';
 import { ServerGateway } from '../socket/socket.gateway';
 import { searchDriver } from '../utils/orders';
-import { EmitterService } from '../emitter/emitter.service';
 
 @Processor('order-processing')
 export class OrderProcessingConsumer {
@@ -17,7 +16,6 @@ export class OrderProcessingConsumer {
     @Inject('REDIS_GEO_CLIENT') private readonly drivers: Redis,
     private readonly io: ServerGateway,
     private readonly db: DatabaseService,
-    private readonly autoEmitter: EmitterService
   ) {}
   @Process()
   async processNamedJob(job: Job<any>, done: DoneCallback): Promise<any> {
@@ -26,21 +24,20 @@ export class OrderProcessingConsumer {
         let order_info = job.data;
         order_info.attempts = parseInt(order_info.attempts) + 1;
         order_info.jobId =
-            'order-' + order_info.id + '-' + parseInt(order_info.attempts);
+          'order-' + order_info.id + '-' + parseInt(order_info.attempts);
         await this.redisPubClient.set(
-            `cityorder${job.data.id}`,
-            JSON.stringify(order_info),
-            'EX',
-            4 * 60,
+          `cityorder${job.data.id}`,
+          JSON.stringify(order_info),
+          'EX',
+          4 * 60,
         );
         await searchDriver(
-            this.drivers,
-            order_info,
-            this.io,
-            this.redisAsyncClient,
-            this.redisPubClient,
-            this.db,
-            this.autoEmitter,
+          this.drivers,
+          order_info,
+          this.io,
+          this.redisAsyncClient,
+          this.redisPubClient,
+          this.db,
         );
         let lastjob = await job.queue.getJob(order_info.jobId);
         await lastjob?.remove();
@@ -51,7 +48,7 @@ export class OrderProcessingConsumer {
       }
       done();
     } catch (e) {
-        console.log("Error in function processNamedJob: ", e)
+      console.log('Error in function processNamedJob: ', e);
     }
   }
 }
