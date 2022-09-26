@@ -9,7 +9,7 @@ import { ServerGateway } from './socket/socket.gateway';
 import { RmqContext } from '@nestjs/microservices';
 import { EventBody } from './dto/event_body';
 import { CityOrder, Order, OrderInfo, OrderStatuses } from './dto/orders';
-import { Driver } from './dto/driver';
+import { Driver, DriverFromGeoRedis } from './dto/driver';
 
 @Injectable()
 export class AppService {
@@ -294,8 +294,7 @@ export class AppService {
     }
   }
 
-  async getAllOnlineDrivers(): Promise<any> {
-
+  async getAllOnlineDrivers(): Promise<Driver[] | Error> {
     const options = {
       withCoordinates: true,
       withHashes: false,
@@ -304,18 +303,35 @@ export class AppService {
       units: 'km',
     }
 
-    let drivers: Driver[];
+    let drivers: Driver[] = [];
+    let driver_id: number = 0;
 
-    const [ latitude, longitude ] = [41, 69]
+    const [ latitude, longitude ] = [ 41.375634, 69.198809 ];
 
-    this.drivers.radius({ latitude, longitude }, 10, options, (err, driversList) => {
-      if (err) {
-        console.log(err)
-      } else {
-        console.log(driversList)
-      }
-    })
+    const promise = new Promise<DriverFromGeoRedis[]>((resolve, reject) => {
+      this.drivers.radius({ latitude, longitude }, 10, options, (err: Error, driversList: DriverFromGeoRedis[]) => {
+        if (err) {
+          reject(err)
+        } else {
+          resolve(driversList)
+        }
+      })
+    });
 
-    return JSON.stringify("ok");
+    for (let driver in this.drivers) {
+      console.log(driver);
+    }
+    try {
+      const driversList: DriverFromGeoRedis[] = await promise;
+
+      driversList.forEach(driver => {
+        driver_id = +driver.key.split("_")[1]
+        drivers.push({ id: driver_id, latitude: driver.latitude, longitude: driver.longitude })
+      })
+
+      return drivers
+    } catch (err) {
+        this.logger.error(err)
+    }
   }
 }
