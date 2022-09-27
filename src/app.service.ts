@@ -307,27 +307,32 @@ export class AppService {
     let driver_id: number = 0;
 
     const [ latitude, longitude ] = [ 41.375634, 69.198809 ];
-
-    const promise = new Promise<DriverFromGeoRedis[]>((resolve, reject) => {
-      this.drivers.radius({ latitude, longitude }, 10, options, (err: Error, driversList: DriverFromGeoRedis[]) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve(driversList)
-        }
-      })
-    });
-
-    for (let driver in this.drivers) {
-      console.log(driver);
-    }
     try {
+      const promise = new Promise<DriverFromGeoRedis[]>((resolve, reject) => {
+        this.drivers.radius({ latitude, longitude }, 100000, options, (err: Error, driversList: DriverFromGeoRedis[]) => {
+          if (err) {
+            reject(err)
+          } else {
+            resolve(driversList)
+          }
+        })
+      });
+
       const driversList: DriverFromGeoRedis[] = await promise;
 
       driversList.forEach(driver => {
         driver_id = +driver.key.split("_")[1]
-        drivers.push({ id: driver_id, latitude: driver.latitude, longitude: driver.longitude })
+        drivers.push({ id: driver_id, latitude: driver.latitude, longitude: driver.longitude, bearing: null })
       })
+
+      let value: string
+      for (let i = 0; i < drivers.length; i++) {
+        value = await this.redisAsyncClient.get(`driver_${drivers[i].id}_vb`)
+
+        if (value) {
+          drivers[i].bearing = parseInt(value.split(":")[1])
+        }
+      }
 
       return drivers
     } catch (err) {

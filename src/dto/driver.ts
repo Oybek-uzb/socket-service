@@ -2,6 +2,7 @@ export interface Driver {
     id: number;
     latitude: number | null;
     longitude: number | null;
+    bearing: number | null;
 }
 export interface DriverFromGeoRedis {
  key: string;

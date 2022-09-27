@@ -90,23 +90,41 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
       accurate: true,
     };
 
-    const driver = new Promise((resolve, reject) => {
-      this.drivers.nearby(
-        { latitude: msg.latitude, longitude: msg.longitude },
-        msg.distance,
-        options,
-        function (err, driver) {
-          if (err) {
-            console.log(err);
-            reject(err);
-          } else {
-            resolve(driver);
+    let drivers: any[] = await this.nearbyDrivers(msg.latitude, msg.longitude, msg.distance, options)
+    let arr = []
+    for (let index = 0; index < drivers.length; index++) {
+      let item = drivers[index];
+      let driver_id = item.key.replace("driver_", "")
+      let last_update = await this.redisAsyncClient.get(`driver_${driver_id}_location_last_update`)
+      if(last_update !== null && +last_update >= Math.floor(new Date().getTime() / 1000) - 60){
+        let value1 = await this.redisAsyncClient.get(`driver_${driver_id}_vb`)
+        if(value1){
+          let vb = value1.split(":")
+          if(vb.length == 2){
+            arr.push({
+              id: parseInt(driver_id),
+              speed: parseFloat(vb[0]),
+              bearing: parseInt(vb[1]),
+              latitude: item.latitude,
+              longitude: item.longitude
+            })
           }
-        },
-      );
-    });
+        }
+      }
+    }
 
-    return await driver;
+    return arr;
+  }
+
+  nearbyDrivers(lat, lng, distance, options) {
+    return new Promise<any[]>((resolve, reject) => {
+      this.drivers.nearby({latitude: lat, longitude: lng}, distance, options, function (err, driver) {
+        if (err) resolve([])
+        else {
+          resolve(driver)
+        }
+      })
+    })
   }
 
   @SubscribeMessage('send_message')
