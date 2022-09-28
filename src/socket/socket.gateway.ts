@@ -33,7 +33,7 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
     server.adapter(createAdapter(this.redisPubClient, this.redisSubClient));
     server.use(async (socket: Socket, next: NextFunction) => {
       const header = socket.handshake.headers['authorization'];
-      let is_valid = await this.isValidJwt(header, socket);
+      const is_valid = await this.isValidJwt(header, socket);
       if (is_valid) {
         next();
       } else {
@@ -45,7 +45,7 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async isValidJwt(header, socket) {
     try {
       const token = header.split(' ')[1];
-      let decoded = jwtDecode.default<any>(token);
+      const decoded = jwtDecode.default<any>(token);
       // console.log(decodeid.user_type, decoded.user_id)
       process.env.TZ = 'Asia/Tashkent';
       const now = new Date().getTime();
@@ -80,7 +80,7 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('driver_locations')
   async handleDriverLocations(socket: Socket, msg) {
-    let options = {
+    const options = {
       withCoordinates: true,
       withHashes: false,
       withDistances: true,
@@ -90,24 +90,36 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
       accurate: true,
     };
 
-    let drivers: any[] = await this.nearbyDrivers(msg.latitude, msg.longitude, msg.distance, options)
-    let arr = []
+    const drivers: any[] = await this.nearbyDrivers(
+      msg.latitude,
+      msg.longitude,
+      msg.distance,
+      options,
+    );
+    const arr = [];
     for (let index = 0; index < drivers.length; index++) {
-      let item = drivers[index];
-      let driver_id = item.key.replace("driver_", "")
-      let last_update = await this.redisAsyncClient.get(`driver_${driver_id}_location_last_update`)
-      if(last_update !== null && +last_update >= Math.floor(new Date().getTime() / 1000) - 60){
-        let value1 = await this.redisAsyncClient.get(`driver_${driver_id}_vb`)
-        if(value1){
-          let vb = value1.split(":")
-          if(vb.length == 2){
+      const item = drivers[index];
+      const driver_id = item.key.replace('driver_', '');
+      const last_update = await this.redisAsyncClient.get(
+        `driver_${driver_id}_location_last_update`,
+      );
+      if (
+        last_update !== null &&
+        +last_update >= Math.floor(new Date().getTime() / 1000) - 60
+      ) {
+        const value1 = await this.redisAsyncClient.get(
+          `driver_${driver_id}_vb`,
+        );
+        if (value1) {
+          const vb = value1.split(':');
+          if (vb.length == 2) {
             arr.push({
               id: parseInt(driver_id),
               speed: parseFloat(vb[0]),
               bearing: parseInt(vb[1]),
               latitude: item.latitude,
-              longitude: item.longitude
-            })
+              longitude: item.longitude,
+            });
           }
         }
       }
@@ -118,13 +130,18 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   nearbyDrivers(lat, lng, distance, options) {
     return new Promise<any[]>((resolve, reject) => {
-      this.drivers.nearby({latitude: lat, longitude: lng}, distance, options, function (err, driver) {
-        if (err) resolve([])
-        else {
-          resolve(driver)
-        }
-      })
-    })
+      this.drivers.nearby(
+        { latitude: lat, longitude: lng },
+        distance,
+        options,
+        function (err, driver) {
+          if (err) resolve([]);
+          else {
+            resolve(driver);
+          }
+        },
+      );
+    });
   }
 
   @SubscribeMessage('send_message')
@@ -204,6 +221,16 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.redisPubClient.set(
         `driver_${msg.driver_id}_location_last_update`,
         Math.floor(new Date().getTime() / 1000),
+        'EX',
+        30 * 60,
+        function (err, value) {
+          if (err) console.error(err);
+          // console.log(value, msg.driver_id)
+        },
+      );
+      this.redisPubClient.set(
+        `driver_${msg.driver_id}_vb`,
+        `${msg.speed}:${msg.bearing}`,
         'EX',
         30 * 60,
         function (err, value) {

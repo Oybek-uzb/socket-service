@@ -9,7 +9,7 @@ import { ServerGateway } from './socket/socket.gateway';
 import { RmqContext } from '@nestjs/microservices';
 import { EventBody } from './dto/event_body';
 import { CityOrder, Order, OrderInfo, OrderStatuses } from './dto/orders';
-import { Driver, DriverFromGeoRedis } from './dto/driver';
+import {Driver, DriverFromGeoRedis, ResponseAllOnlineDrivers} from './dto/driver';
 
 @Injectable()
 export class AppService {
@@ -66,7 +66,8 @@ export class AppService {
   }
 
   async searchDrivers(request: Request, response: Response) {
-    let ip = request.headers['x-forwarded-for'] || request.socket.remoteAddress;
+    const ip =
+      request.headers['x-forwarded-for'] || request.socket.remoteAddress;
     let order_info: OrderInfo;
     let sub_order: CityOrder;
     let order: Order;
@@ -128,7 +129,7 @@ export class AppService {
           this.redisPubClient,
           this.db,
         );
-        let job = await this.queue.getJob(order_info.jobId);
+        const job = await this.queue.getJob(order_info.jobId);
         await job?.remove();
         await this.queue.add(order_info, {
           jobId: order_info.jobId,
@@ -167,8 +168,8 @@ export class AppService {
           success: true,
         });
       } else {
-        let order_info: OrderInfo = JSON.parse(order_info_string);
-        let job = await this.queue.getJob(order_info.jobId);
+        const order_info: OrderInfo = JSON.parse(order_info_string);
+        const job = await this.queue.getJob(order_info.jobId);
 
         await job?.remove();
         order_info.attempts = order_info.attempts + 1;
@@ -190,7 +191,7 @@ export class AppService {
           this.db,
         );
 
-        let lastjob = await this.queue.getJob(order_info.jobId);
+        const lastjob = await this.queue.getJob(order_info.jobId);
         await lastjob?.remove();
         await this.queue.add(order_info, {
           jobId: order_info.jobId,
@@ -228,20 +229,20 @@ export class AppService {
           success: true,
         });
       } else {
-        let order_info: OrderInfo = JSON.parse(order_info_string);
+        const order_info: OrderInfo = JSON.parse(order_info_string);
         for (let index = 1; index <= 10; index++) {
-          let lastjob = await this.queue.getJob(
+          const lastjob = await this.queue.getJob(
             'order-' + order_info.id + '-' + index,
           );
           await lastjob?.remove();
         }
 
         order_info.status = OrderStatuses.ClientCancelled;
-        let driver_id: string = await this.redisAsyncClient.get(
+        const driver_id: string = await this.redisAsyncClient.get(
           `order_driver_${order_info.id}`,
         );
 
-        let socket_id: string = await this.redisAsyncClient.get(
+        const socket_id: string = await this.redisAsyncClient.get(
           `siddriver${driver_id}`,
         );
 
@@ -278,9 +279,9 @@ export class AppService {
           success: true,
         });
       } else {
-        let order_info: OrderInfo = JSON.parse(order_info_string);
+        const order_info: OrderInfo = JSON.parse(order_info_string);
         for (let index = 1; index <= 10; index++) {
-          let lastjob = await this.queue.getJob(
+          const lastjob = await this.queue.getJob(
             'order-' + order_info.id + '-' + index,
           );
           await lastjob?.remove();
@@ -294,49 +295,68 @@ export class AppService {
     }
   }
 
-  async getAllOnlineDrivers(): Promise<Driver[] | Error> {
+  async getAllOnlineDrivers(): Promise<ResponseAllOnlineDrivers | Error> {
     const options = {
       withCoordinates: true,
       withHashes: false,
       withDistances: true,
       order: 'ASC',
       units: 'km',
-    }
+    };
 
-    let drivers: Driver[] = [];
-    let driver_id: number = 0;
+    const response: ResponseAllOnlineDrivers = {
+      success: false,
+      body: null,
+    };
 
-    const [ latitude, longitude ] = [ 41.375634, 69.198809 ];
+    const drivers: Driver[] = [];
+    let driver_id = 0;
+
+    const [latitude, longitude] = [41.375634, 69.198809];
     try {
       const promise = new Promise<DriverFromGeoRedis[]>((resolve, reject) => {
-        this.drivers.radius({ latitude, longitude }, 100000, options, (err: Error, driversList: DriverFromGeoRedis[]) => {
-          if (err) {
-            reject(err)
-          } else {
-            resolve(driversList)
-          }
-        })
+        this.drivers.radius(
+          { latitude, longitude },
+          100000,
+          options,
+          (err: Error, driversList: DriverFromGeoRedis[]) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(driversList);
+            }
+          },
+        );
       });
 
       const driversList: DriverFromGeoRedis[] = await promise;
 
-      driversList.forEach(driver => {
-        driver_id = +driver.key.split("_")[1]
-        drivers.push({ id: driver_id, latitude: driver.latitude, longitude: driver.longitude, bearing: null })
-      })
+      driversList.forEach((driver) => {
+        driver_id = +driver.key.split('_')[1];
+        drivers.push({
+          id: driver_id,
+          latitude: driver.latitude,
+          longitude: driver.longitude,
+          bearing: null,
+        });
+      });
 
-      let value: string
+      let value: string;
       for (let i = 0; i < drivers.length; i++) {
-        value = await this.redisAsyncClient.get(`driver_${drivers[i].id}_vb`)
+        value = await this.redisAsyncClient.get(`driver_${drivers[i].id}_vb`);
 
         if (value) {
-          drivers[i].bearing = parseInt(value.split(":")[1])
+          drivers[i].bearing = parseInt(value.split(':')[1]);
         }
       }
 
-      return drivers
+      response.success = true;
+      response.body = drivers;
+
+      return response;
     } catch (err) {
-        this.logger.error(err)
+      this.logger.error(err);
+      return response;
     }
   }
 }
