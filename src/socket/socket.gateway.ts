@@ -195,13 +195,10 @@ export class ServerGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('set_driver_offline')
-  handleSetDriverOffline(socket: Socket, msg) {
-    this.drivers.removeLocation(
-      'driver_' + msg.driver_id,
-      function (err, reply) {
-        if (err) console.error(err);
-      },
-    );
+  handleSetDriverOffline(socket: Socket, driver_id) {
+    this.drivers.removeLocation('driver_' + driver_id, function (err, reply) {
+      if (err) console.error(err);
+    });
   }
 
   @SubscribeMessage('set_driver_location')

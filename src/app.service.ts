@@ -9,7 +9,11 @@ import { ServerGateway } from './socket/socket.gateway';
 import { RmqContext } from '@nestjs/microservices';
 import { EventBody } from './dto/event_body';
 import { CityOrder, Order, OrderInfo, OrderStatuses } from './dto/orders';
-import {Driver, DriverFromGeoRedis, ResponseAllOnlineDrivers} from './dto/driver';
+import {
+  Driver,
+  DriverFromGeoRedis,
+  ResponseAllOnlineDrivers,
+} from './dto/driver';
 
 @Injectable()
 export class AppService {

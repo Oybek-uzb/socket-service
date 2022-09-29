@@ -1,33 +1,33 @@
 version: '3.6'
 services:
-  rabbit:
-    image: rabbitmq:3-management
-    hostname: rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: "guest"
-      RABBITMQ_DEFAULT_PASS: "guest"
-    command: rabbitmq-server
-    ports:
-    - "5672:5672"
-    - "15672:15672"
-    restart: always
-    networks:
-    - test-network
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "amqp://guest:guest@rabbitmq:15672" ]
-      interval: 10s
-      timeout: 60s
-      retries: 5
-
-  redis:
-    image: redis:5.0.5
-    hostname: redis
-    ports:
-    - "6379:6379"
-    command: redis-server
-    restart: always
-    networks:
-    - test-network
+#  rabbit:
+#    image: rabbitmq:3-management
+#    hostname: rabbitmq
+#    environment:
+#      RABBITMQ_DEFAULT_USER: "guest"
+#      RABBITMQ_DEFAULT_PASS: "guest"
+#    command: rabbitmq-server
+#    ports:
+#    - "5672:5672"
+#    - "15672:15672"
+#    restart: always
+#    networks:
+#    - test-network
+#    healthcheck:
+#      test: [ "CMD", "curl", "-f", "amqp://guest:guest@rabbitmq:15672" ]
+#      interval: 10s
+#      timeout: 60s
+#      retries: 5
+#
+#  redis:
+#    image: redis:5.0.5
+#    hostname: redis
+#    ports:
+#    - "6379:6379"
+#    command: redis-server
+#    restart: always
+#    networks:
+#    - test-network
 
   app:
     ports:
@@ -37,10 +37,10 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: on-failure
-    depends_on:
-      - rabbit
-      - redis
-    links: [rabbit, redis]
+#    depends_on:
+#      - rabbit
+#      - redis
+#    links: [rabbit, redis]
     networks:
       - test-network
 networks:
